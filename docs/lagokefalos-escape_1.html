@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ΛΑΓΟΚΕΦΑΛΟΣ: Η Επικήρυξη</title>
+<style>
+  :root{
+    --deep:#0B3E6F; --sea:#1273B5; --seaLight:#2E9BD6; --foam:#EAF6FC;
+    --white:#FFFFFF; --sun:#FFC93C; --coral:#FF5A4E; --ink:#062A4A;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:var(--deep);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    touch-action:none;user-select:none;-webkit-user-select:none}
+  #wrap{position:fixed;inset:0;display:flex;justify-content:center;align-items:center;background:var(--deep)}
+  canvas{display:block;background:var(--sea)}
+  .overlay{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;
+    text-align:center;padding:24px;z-index:10;background:linear-gradient(180deg,rgba(6,42,74,.88),rgba(11,62,111,.94));color:var(--white)}
+  .hidden{display:none!important}
+  .eyebrow{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--sun);font-weight:700;margin-bottom:10px}
+  h1{font-size:clamp(30px,9vw,46px);font-weight:900;line-height:1.02;letter-spacing:-.01em}
+  h1 .sub{display:block;font-size:.42em;font-weight:700;color:var(--foam);letter-spacing:.14em;margin-top:8px}
+  .bounty{margin:18px 0 6px;background:var(--sun);color:var(--ink);font-weight:900;
+    padding:10px 18px;border-radius:999px;font-size:15px;transform:rotate(-2deg);box-shadow:0 6px 0 rgba(0,0,0,.18)}
+  .note{font-size:13px;color:#BFE0F5;max-width:300px;line-height:1.5;margin-top:10px}
+  .btn{margin-top:22px;background:var(--coral);color:#fff;border:none;font-weight:900;font-size:18px;
+    padding:16px 44px;border-radius:14px;box-shadow:0 5px 0 #B23A32;cursor:pointer}
+  .btn:active{transform:translateY(3px);box-shadow:0 2px 0 #B23A32}
+  .btn.ghost{background:transparent;box-shadow:none;border:2px solid #6FB6E3;font-size:14px;padding:10px 22px;margin-top:12px}
+  .euro-big{font-size:clamp(40px,14vw,72px);font-weight:900;color:var(--sun);margin:6px 0;font-variant-numeric:tabular-nums}
+  .death{font-size:14px;color:#FFD9D5;font-style:italic;max-width:300px;line-height:1.5;margin-top:6px}
+  .stat{font-size:14px;color:#BFE0F5;margin-top:4px}
+  input#nameIn{margin-top:14px;padding:12px 16px;border-radius:12px;border:none;font-size:16px;width:230px;
+    text-align:center;font-weight:700;color:var(--ink);outline:none}
+  #board{margin-top:16px;width:min(300px,86vw);background:rgba(255,255,255,.07);border-radius:14px;padding:12px 16px;text-align:left}
+  #board h3{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--sun);margin-bottom:8px}
+  #board .row{display:flex;justify-content:space-between;font-size:14px;padding:3px 0;color:var(--foam)}
+  #board .row b{color:var(--white)}
+  #board .me{color:var(--sun)}
+  .tiny{font-size:11px;color:#7FB4D8;margin-top:16px;max-width:280px;line-height:1.5}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="cv"></canvas></div>
+
+<!-- START -->
+<div class="overlay" id="startScr">
+  <div class="eyebrow">Υπουργείο Αγροτικής Ανάπτυξης παρουσιάζει*</div>
+  <h1>ΛΑΓΟΚΕΦΑΛΟΣ<span class="sub">Η ΕΠΙΚΗΡΥΞΗ</span></h1>
+  <div class="bounty">💰 Αμοιβή: €5,33 / κιλό</div>
+  <div class="note">Απόφυγε τους μεγάλους λαγοκέφαλους 🐡<br>Μάζεψε τους μικρούς για την επικήρυξη 💶<br><b>Σύρε ← → για να αλλάξεις λωρίδα</b></div>
+  <button class="btn" id="playBtn">ΞΕΚΙΝΑ</button>
+  <div class="stat" id="bestLine"></div>
+  <div class="tiny">*Παρωδία. Ο λαγοκέφαλος δεν τρώγεται. Το leaderboard είναι δημόσιο — το όνομά σου θα φαίνεται σε άλλους παίκτες.</div>
+</div>
+
+<!-- GAME OVER -->
+<div class="overlay hidden" id="overScr">
+  <div class="eyebrow">Επίσημη Απόδειξη Επικήρυξης</div>
+  <div class="euro-big" id="euroFinal">€0.00</div>
+  <div class="stat" id="haulLine"></div>
+  <div class="stat" id="islandLine"></div>
+  <div class="death" id="deathMsg"></div>
+  <input id="nameIn" maxlength="14" placeholder="Το όνομά σου..." autocomplete="off">
+  <button class="btn" id="againBtn">ΞΑΝΑ!</button>
+  <button class="btn ghost" id="shareBtn">📣 Μοιράσου το</button>
+  <div id="board"><h3>🏆 Παγκόσμιο Ταμείο</h3><div id="boardRows">Φόρτωση...</div></div>
+</div>
+
+<script>
+(()=>{
+"use strict";
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=Math.min(window.innerWidth,520);H=window.innerHeight;
+  cv.width=W*DPR;cv.height=H*DPR;cv.style.width=W+'px';cv.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+resize();window.addEventListener('resize',resize);
+
+const RATE=5.33;
+const ISLANDS=['ΚΡΗΤΗ','ΣΑΝΤΟΡΙΝΗ','ΙΟΣ','ΠΑΡΟΣ','ΝΑΞΟΣ','ΜΥΚΟΝΟΣ','ΤΗΝΟΣ','ΑΝΔΡΟΣ','ΣΥΡΟΣ','ΜΗΛΟΣ'];
+const DEATHS=[
+ 'Σε δάγκωσε! Ο Ερυθρός Σταυρός συνιστά: καθάρισε την πληγή με άφθονο νερό και σαπούνι.',
+ 'Το ΕΛΚΕΘΕ διευκρινίζει: το περιστατικό δεν επιβεβαιώνεται.',
+ 'Έγινες viral στο TikTok. #λαγοκεφαλος #fyp #mpesfypgamw',
+ 'Η WWF δηλώνει: «Έχουμε κάνει την τρίχα τριχιά».',
+ 'Οι ψαράδες σε προειδοποίησαν. Δεν άκουσες.'
+];
+const BITE_QUIPS=[
+ 'ΩΧ! Με δάγκωσε ρε!',
+ 'Τον πόνο μου! 😵',
+ 'Αυτό θα το πω στο ΕΛΚΕΘΕ!',
+ 'Κάλεσε τον Ερυθρό Σταυρό!',
+ 'Μαμάαα!',
+ 'Ρε συ, μόλις έφαγα!',
+ 'Το περιστατικό ΕΠΙΒΕΒΑΙΩΝΕΤΑΙ!',
+ 'Αυτό δεν ήταν στο πακέτο διακοπών!'
+];
+const IDLE_QUIPS=[
+ 'Ωραίο μπανάκι λέμε...',
+ '€5,33 το κιλό, θα πλουτίσω! 💰',
+ 'Πού είναι το freddo μου; ☕',
+ 'Αυτό πάει κατευθείαν TikTok 📱',
+ 'Καλύτερα από 8ωρο πάντως',
+ 'Η θάλασσα ήταν ήσυχη... πολύ ήσυχη',
+ 'Οι ψαράδες είχαν δίκιο τελικά',
+ 'Νέο επάγγελμα: κυνηγός λαγοκέφαλων',
+ 'Το Υπουργείο με καμαρώνει 🇬🇷',
+ 'Λέτε να με δαγκώσει; ...Λέτε;'
+];
+let quip=null,quipT=0,idleQuipT=5;
+
+// game state
+let running=false,tPrev=0,speed=0,dist=0,lives=3,haulKg=0,islandIdx=0,nextIslandAt=400;
+let lane=1,laneX=0,playerY=0,inv=0,wobble=0;
+let fishes=[],splashes=[],popups=[],powers=[],land=null,bannerT=0,bannerTxt='';
+let freddoT=0,multT=0,slowT=0,powerT=6;
+let best=0,playerName='';
+
+const LANES=3;
+function laneCX(i){const m=W*0.14,w=(W-2*m)/LANES;return m+w*i+w/2;}
+
+function reset(){
+  speed=210;dist=0;lives=3;haulKg=0;islandIdx=0;nextIslandAt=400;
+  lane=1;laneX=laneCX(1);playerY=H*0.78;inv=0;
+  fishes=[];splashes=[];popups=[];powers=[];land=null;
+  freddoT=0;multT=0;slowT=0;powerT=5;
+  quip=null;quipT=0;idleQuipT=5;
+  bannerT=1.6;bannerTxt='ΚΡΗΤΗ';
+}
+
+// spawning
+let spawnT=0;
+function spawn(dt){
+  powerT-=dt;
+  if(powerT<=0){
+    powerT=7+Math.random()*4;
+    const types=['freddo','souvlaki','net','cam'];
+    const ty=types[Math.floor(Math.random()*types.length)];
+    const pl=Math.floor(Math.random()*LANES);
+    powers.push({type:ty,x:laneCX(pl),y:-40});
+  }
+  spawnT-=dt;
+  if(spawnT>0)return;
+  const diff=Math.min(1,dist/3000);
+  spawnT=Math.max(0.32,0.9-diff*0.5)+Math.random()*0.3;
+  const l=Math.floor(Math.random()*LANES);
+  const danger=Math.random()<0.62;
+  const kg=danger?(8+Math.random()*7):(1+Math.random()*4);
+  fishes.push({l,x:laneCX(l),y:-60,danger,kg,r:danger?(26+kg*1.3):(14+kg*2),
+    flap:Math.random()*6,drift:(Math.random()-0.5)*30});
+}
+
+// input — το jet ski ακολουθεί το δάχτυλο
+let touchMoved=false,usedTouch=false;
+function setLane(n){lane=Math.max(0,Math.min(LANES-1,n));}
+function laneFromX(x){
+  const m=W*0.14,w=(W-2*m)/LANES;
+  return Math.floor((x-m)/w);
+}
+cv.addEventListener('touchstart',e=>{
+  usedTouch=true;touchMoved=false;
+},{passive:true});
+cv.addEventListener('touchmove',e=>{
+  touchMoved=true;
+  setLane(laneFromX(e.touches[0].clientX));
+},{passive:true});
+cv.addEventListener('touchend',e=>{
+  if(!touchMoved){ // απλό tap = μία λωρίδα προς τη μεριά του tap
+    const x=e.changedTouches[0].clientX;
+    setLane(lane+(x>W/2?1:-1));
+  }
+},{passive:true});
+window.addEventListener('keydown',e=>{
+  if(e.key==='ArrowLeft')setLane(lane-1);
+  if(e.key==='ArrowRight')setLane(lane+1);
+});
+// click μόνο για desktop — στο κινητό το synthetic click προκαλούσε διπλή κίνηση
+cv.addEventListener('click',e=>{
+  if(usedTouch||!running)return;
+  setLane(lane+(e.clientX>W/2?1:-1));
+});
+
+// drawing helpers
+function drawSea(t){
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#2E9BD6');g.addColorStop(1,'#0E5C99');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // lane foam lines
+  ctx.strokeStyle='rgba(255,255,255,0.14)';ctx.lineWidth=2;ctx.setLineDash([14,22]);
+  const m=W*0.14,w=(W-2*m)/LANES;
+  const off=(dist*2.2)%36;
+  for(let i=0;i<=LANES;i++){
+    ctx.beginPath();ctx.moveTo(m+w*i,-36+off);ctx.lineTo(m+w*i,H+36);ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // drifting wave arcs
+  ctx.strokeStyle='rgba(255,255,255,0.10)';ctx.lineWidth=3;
+  for(let i=0;i<7;i++){
+    const y=((i*H/6)+(dist*1.4))%(H+80)-40;
+    const x=(i*97)%W;
+    ctx.beginPath();ctx.arc(x,y,16,Math.PI*0.15,Math.PI*0.85);ctx.stroke();
+  }
+}
+function drawFish(f,t){
+  const{x,y,danger,r}=f;
+  ctx.save();ctx.translate(x,y);
+  const sway=Math.sin(t*5+f.flap)*0.06;
+  ctx.rotate(sway);
+  const L=r*1.7; // body length (head at bottom, swimming toward player)
+  // tail fin (top)
+  ctx.fillStyle=danger?'#5F707B':'#7C8B95';
+  ctx.beginPath();ctx.moveTo(0,-L*0.72);
+  ctx.lineTo(-r*0.45,-L*1.05);ctx.lineTo(0,-L*0.9);ctx.lineTo(r*0.45,-L*1.05);
+  ctx.closePath();ctx.fill();
+  // elongated silver body, blunt rounded head at bottom
+  const bg=ctx.createLinearGradient(-r,0,r,0);
+  bg.addColorStop(0,danger?'#8E9EA8':'#A9B7C0');
+  bg.addColorStop(0.5,danger?'#B9C6CE':'#D4DEE4');
+  bg.addColorStop(1,danger?'#8E9EA8':'#A9B7C0');
+  ctx.fillStyle=bg;
+  ctx.beginPath();
+  ctx.moveTo(0,-L*0.78);
+  ctx.quadraticCurveTo(-r*0.55,-L*0.55,-r*0.85,-L*0.05);
+  ctx.quadraticCurveTo(-r,-L*0.35+L*0.7,-r*0.72,L*0.5);   // widen toward head
+  ctx.quadraticCurveTo(-r*0.5,L*0.78,0,L*0.8);            // blunt snout
+  ctx.quadraticCurveTo(r*0.5,L*0.78,r*0.72,L*0.5);
+  ctx.quadraticCurveTo(r,L*0.35,r*0.85,-L*0.05);
+  ctx.quadraticCurveTo(r*0.55,-L*0.55,0,-L*0.78);
+  ctx.closePath();ctx.fill();
+  // white belly stripe (sides)
+  ctx.fillStyle='rgba(255,255,255,0.65)';
+  ctx.beginPath();ctx.ellipse(0,L*0.15,r*0.62,L*0.55,0,0,Math.PI*2);ctx.fill();
+  // dark grey back with spots (center stripe, since seen from above)
+  ctx.fillStyle=danger?'#4E5B64':'#6B7A84';
+  ctx.beginPath();ctx.ellipse(0,-L*0.1,r*0.42,L*0.6,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(25,32,38,0.75)';
+  for(let i=0;i<7;i++){
+    const sy=-L*0.55+i*L*0.16, sx=Math.sin(i*2.4+f.flap)*r*0.24;
+    ctx.beginPath();ctx.arc(sx,sy,r*0.07,0,Math.PI*2);ctx.fill();
+  }
+  // pectoral side fins
+  ctx.fillStyle=danger?'#5F707B':'#7C8B95';
+  for(const s of[-1,1]){
+    ctx.beginPath();ctx.moveTo(s*r*0.8,L*0.1);
+    ctx.quadraticCurveTo(s*r*1.25,L*0.25,s*r*0.9,L*0.42);
+    ctx.closePath();ctx.fill();
+  }
+  // big eyes on the sides of the blunt head
+  const ew=r*0.24;
+  for(const s of[-1,1]){
+    ctx.fillStyle='#F4E9C8';ctx.beginPath();ctx.arc(s*r*0.5,L*0.42,ew,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#141414';ctx.beginPath();ctx.arc(s*r*0.5,L*0.47,ew*0.55,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(s*r*0.46,L*0.43,ew*0.18,0,Math.PI*2);ctx.fill();
+  }
+  // THE RABBIT MOUTH — blunt snout + two big buck teeth
+  if(danger){
+    // open mouth
+    ctx.fillStyle='#7E2B24';
+    ctx.beginPath();ctx.ellipse(0,L*0.68,r*0.38,r*0.3,0,0,Math.PI*2);ctx.fill();
+    // fused beak plates: two big upper buck teeth + lower plate
+    ctx.fillStyle='#FFF9EE';
+    const tw=r*0.2,th=r*0.26;
+    roundRect(-tw-1.5,L*0.68-th,tw,th,3);ctx.fill();
+    roundRect(1.5,L*0.68-th,tw,th,3);ctx.fill();
+    roundRect(-r*0.24,L*0.68+r*0.06,r*0.48,r*0.14,3);ctx.fill();
+    ctx.strokeStyle='rgba(120,90,60,0.5)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,L*0.68-th);ctx.lineTo(0,L*0.68);ctx.stroke();
+  }else{
+    // closed rabbit smile: two buck teeth poking out
+    ctx.strokeStyle='#54636D';ctx.lineWidth=2.2;
+    ctx.beginPath();ctx.arc(0,L*0.6,r*0.22,0.12*Math.PI,0.88*Math.PI);ctx.stroke();
+    ctx.fillStyle='#FFF9EE';
+    const tw=r*0.13,th=r*0.18;
+    roundRect(-tw-1,L*0.64,tw,th,2);ctx.fill();
+    roundRect(1,L*0.64,tw,th,2);ctx.fill();
+    ctx.strokeStyle='rgba(120,90,60,0.45)';ctx.lineWidth=1;
+    ctx.strokeRect(-tw-1,L*0.64,tw,th);ctx.strokeRect(1,L*0.64,tw,th);
+    // bounty tag
+    ctx.fillStyle='#FFC93C';ctx.font='bold '+Math.max(11,r*0.5)+'px sans-serif';
+    ctx.textAlign='center';ctx.fillText('€',0,-L*0.95);
+  }
+  ctx.restore();
+}
+function drawPlayer(t){
+  const x=laneX,y=playerY;
+  ctx.save();ctx.translate(x,y+Math.sin(t*9)*2);
+  if(freddoT>0){ // χρυσή αύρα καφεΐνης
+    ctx.fillStyle='rgba(255,201,60,'+(0.28+Math.sin(t*12)*0.1)+')';
+    ctx.beginPath();ctx.arc(0,0,52,0,Math.PI*2);ctx.fill();
+  }
+  if(inv>0&&Math.floor(t*14)%2===0)ctx.globalAlpha=0.35;
+  ctx.rotate(wobble*0.06);
+  // wake
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  ctx.beginPath();ctx.moveTo(0,26);ctx.lineTo(-14,58);ctx.lineTo(14,58);ctx.closePath();ctx.fill();
+  // hull
+  ctx.fillStyle='#F5F7F8';
+  ctx.beginPath();ctx.moveTo(0,-32);ctx.quadraticCurveTo(20,-6,16,24);ctx.lineTo(-16,24);ctx.quadraticCurveTo(-20,-6,0,-32);ctx.fill();
+  ctx.fillStyle='#FF5A4E';ctx.fillRect(-16,10,32,8);
+  // rider
+  ctx.fillStyle='#123A5C';ctx.beginPath();ctx.arc(0,-4,9,0,Math.PI*2);ctx.fill(); // torso
+  ctx.fillStyle='#E8B27D';ctx.beginPath();ctx.arc(0,-16,6.5,0,Math.PI*2);ctx.fill(); // head
+  ctx.fillStyle='#0B3E6F';ctx.fillRect(-8,-20,16,4); // cap
+  ctx.restore();
+}
+function drawHUD(){
+  ctx.fillStyle='rgba(6,42,74,0.55)';
+  roundRect(10,10,W-20,54,14);ctx.fill();
+  ctx.fillStyle='#FFC93C';ctx.font='900 24px sans-serif';ctx.textAlign='left';
+  ctx.fillText('€'+(haulKg*RATE).toFixed(2),24,44);
+  ctx.fillStyle='#EAF6FC';ctx.font='700 12px sans-serif';
+  ctx.fillText(haulKg.toFixed(1)+' kg · €5,33/kg',24,58);
+  // lives as drawn hearts (emoji σε canvas δεν δουλεύουν αξιόπιστα σε κινητά)
+  for(let i=0;i<3;i++){
+    drawHeart(W-32-i*26,28,9,(2-i)<lives?'#FF5A4E':'rgba(255,255,255,0.22)');
+  }
+  ctx.fillStyle='#BFE0F5';ctx.font='700 11px sans-serif';
+  ctx.fillText(ISLANDS[Math.min(islandIdx,ISLANDS.length-1)]+' · '+Math.floor(dist)+'m',W-22,57);
+  // active effects
+  const eff=[];
+  if(freddoT>0)eff.push('\u2615 ΑΤΡΩΤΟΣ '+Math.ceil(freddoT));
+  if(multT>0)eff.push('\uD83D\uDD78 \u00D72 '+Math.ceil(multT));
+  if(slowT>0)eff.push('\uD83D\uDCF1 πόζα');
+  if(eff.length){
+    ctx.textAlign='left';ctx.font='700 13px sans-serif';
+    let ex=14;
+    for(const e of eff){
+      const wid=ctx.measureText(e).width+16;
+      ctx.fillStyle='rgba(255,201,60,0.92)';roundRect(ex,72,wid,24,12);ctx.fill();
+      ctx.fillStyle='#062A4A';ctx.fillText(e,ex+8,89);ex+=wid+8;
+    }
+  }
+  // island banner
+  if(bannerT>0){
+    ctx.globalAlpha=Math.min(1,bannerT);
+    ctx.fillStyle='rgba(255,201,60,0.95)';
+    roundRect(W/2-110,H*0.3,220,52,12);ctx.fill();
+    ctx.fillStyle='#062A4A';ctx.textAlign='center';ctx.font='900 22px sans-serif';
+    ctx.fillText('🏝 '+bannerTxt,W/2,H*0.3+34);
+    ctx.globalAlpha=1;
+  }
+}
+// ------- island coastline pass-by -------
+function coastPath(k){
+  const s=land.side,edge=s<0?0:W,wMax=W*0.16,steps=12;
+  ctx.beginPath();ctx.moveTo(edge,land.y);
+  for(let i=0;i<=steps;i++){
+    const yy=land.y+land.len*i/steps;
+    const ww=k*wMax*Math.max(0,Math.sin(Math.PI*i/steps))*(0.6+0.4*Math.sin(i*1.9+land.seed));
+    ctx.lineTo(edge-s*ww,yy);
+  }
+  ctx.lineTo(edge,land.y+land.len);ctx.closePath();
+}
+function drawLand(){
+  coastPath(1.3);ctx.fillStyle='rgba(140,224,229,0.55)';ctx.fill(); // ρηχά νερά
+  coastPath(1);ctx.fillStyle='#EAD9A8';ctx.fill();                   // άμμος
+  coastPath(0.55);ctx.fillStyle='#B9C98A';ctx.fill();                // βλάστηση
+  // Κυκλαδίτικα σπιτάκια στη μέση του νησιού
+  const s=land.side,edge=s<0?0:W,wMax=W*0.16;
+  const midY=land.y+land.len/2;
+  if(midY>-60&&midY<H+60){
+    for(let h=0;h<3;h++){
+      const hy=midY+(h-1)*36,hx=edge-s*(wMax*0.32+h*7);
+      ctx.fillStyle='#FFFFFF';ctx.fillRect(hx-8,hy-6,16,12);
+      ctx.fillStyle='#2C63A8';
+      ctx.beginPath();ctx.arc(hx,hy-6,7,Math.PI,0);ctx.fill();
+    }
+  }
+}
+// ------- power-ups -------
+const P_EMOJI={freddo:'\u2615',souvlaki:'\uD83E\uDD59',net:'\uD83D\uDD78\uFE0F',cam:'\uD83D\uDCF1'};
+function drawPower(p,t){
+  ctx.save();ctx.translate(p.x,p.y+Math.sin(t*4+p.x)*3);
+  ctx.fillStyle='rgba(255,255,255,0.92)';
+  ctx.beginPath();ctx.arc(0,0,20,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#FFC93C';ctx.lineWidth=3;ctx.stroke();
+  ctx.font='19px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(P_EMOJI[p.type],0,2);
+  ctx.textBaseline='alphabetic';
+  ctx.restore();
+}
+function applyPower(ty){
+  if(ty==='freddo'){freddoT=3;addPopup(laneX,playerY-60,'\u2615 ΚΑΦΕΪΝΗ! Άτρωτος 3\u2033!','#FFC93C');}
+  if(ty==='souvlaki'){
+    if(lives<3){lives++;addPopup(laneX,playerY-60,'\uD83E\uDD59 +1 ζωή!','#9BFFB0');}
+    else{haulKg+=2;addPopup(laneX,playerY-60,'\uD83E\uDD59 +2kg (χορτάτος)','#FFC93C');}
+  }
+  if(ty==='net'){multT=5;addPopup(laneX,playerY-60,'\uD83D\uDD78 Δίχτυ \u00D72!','#9BFFB0');}
+  if(ty==='cam'){slowT=2;addPopup(laneX,playerY-60,'\uD83D\uDCF1 Ποζάρουν για TikTok!','#fff');}
+  if(navigator.vibrate)navigator.vibrate(30);
+}
+function drawQuip(){
+  ctx.font='800 14px sans-serif';
+  const pad=12,tw=ctx.measureText(quip.txt).width;
+  const bw=tw+pad*2,bh=32;
+  let bx=laneX-bw/2;
+  bx=Math.max(8,Math.min(W-bw-8,bx));
+  const by=playerY-92;
+  const a=Math.min(1,quipT*3);
+  ctx.globalAlpha=a;
+  ctx.fillStyle='#FFFFFF';
+  roundRect(bx,by,bw,bh,12);ctx.fill();
+  // ουρά φούσκας προς τον αναβάτη
+  ctx.beginPath();
+  ctx.moveTo(laneX-7,by+bh);ctx.lineTo(laneX+7,by+bh);ctx.lineTo(laneX,by+bh+10);
+  ctx.closePath();ctx.fill();
+  ctx.fillStyle='#062A4A';ctx.textAlign='center';
+  ctx.fillText(quip.txt,bx+bw/2,by+21);
+  ctx.globalAlpha=1;
+}
+function drawHeart(x,y,s,col){
+  ctx.save();ctx.translate(x,y);ctx.fillStyle=col;
+  ctx.beginPath();
+  ctx.moveTo(0,s*0.35);
+  ctx.bezierCurveTo(s,-s*0.45,s*1.9,s*0.5,0,s*1.5);
+  ctx.bezierCurveTo(-s*1.9,s*0.5,-s,-s*0.45,0,s*0.35);
+  ctx.fill();ctx.restore();
+}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+// popups & splashes
+function addPopup(x,y,txt,col){popups.push({x,y,txt,col,t:1});}
+function addSplash(x,y){for(let i=0;i<8;i++)splashes.push({x,y,vx:(Math.random()-0.5)*160,vy:-60-Math.random()*120,t:0.6});}
+
+// loop
+function loop(ts){
+  if(!running)return;
+  const t=ts/1000;const dt=Math.min(0.033,t-tPrev);tPrev=t;
+  // effect timers
+  if(freddoT>0)freddoT-=dt;
+  if(multT>0)multT-=dt;
+  if(slowT>0)slowT-=dt;
+  // difficulty (+ freddo boost)
+  speed=(210+Math.min(260,dist*0.06))*(freddoT>0?1.35:1);
+  dist+=speed*dt*0.06;
+  if(dist>=nextIslandAt){islandIdx++;nextIslandAt+=400+islandIdx*80;
+    bannerTxt=ISLANDS[Math.min(islandIdx,ISLANDS.length-1)];bannerT=1.6;
+    land={side:Math.random()<0.5?-1:1,y:-H*1.1,len:H*1.05,seed:Math.floor(Math.random()*99)};
+    addPopup(W/2,H*0.42,'+ ταχύτητα!','#fff');}
+  bannerT-=dt;
+  // quips: κάθε λίγο ο αναβάτης λέει κάτι
+  if(quip){quipT-=dt;if(quipT<=0)quip=null;}
+  else{idleQuipT-=dt;
+    if(idleQuipT<=0){
+      quip={txt:IDLE_QUIPS[Math.floor(Math.random()*IDLE_QUIPS.length)]};quipT=2.4;
+      idleQuipT=8+Math.random()*7;
+    }}
+  if(land){land.y+=speed*dt;if(land.y-land.len>H+60)land=null;}
+  // player lane easing
+  const target=laneCX(lane);
+  const d=target-laneX;laneX+=d*Math.min(1,dt*13);wobble=d/60;
+  if(inv>0)inv-=dt;
+  spawn(dt);
+  // fish (TikTok camera makes them stop and pose)
+  const fs=slowT>0?0.22:1;
+  for(const f of fishes){f.y+=speed*fs*dt;f.x+=f.drift*fs*dt;}
+  fishes=fishes.filter(f=>f.y<H+80);
+  // power-ups
+  for(let i=powers.length-1;i>=0;i--){
+    const p=powers[i];p.y+=speed*fs*dt;
+    if(p.y>H+60){powers.splice(i,1);continue;}
+    if(Math.abs(p.y-playerY)<44&&Math.abs(p.x-laneX)<42){
+      applyPower(p.type);powers.splice(i,1);
+    }
+  }
+  // collide
+  for(let i=fishes.length-1;i>=0;i--){
+    const f=fishes[i];
+    if(Math.abs(f.y-playerY)<f.r+22&&Math.abs(f.x-laneX)<f.r+16){
+      if(f.danger){
+        if(freddoT>0){ // καφεϊνωμένος: άτρωτος, τους διαλύεις και παίρνεις τα κιλά
+          const gain=f.kg*(multT>0?2:1);
+          haulKg+=gain;fishes.splice(i,1);
+          addPopup(f.x,f.y-30,'💥 +'+gain.toFixed(1)+'kg = €'+(gain*RATE).toFixed(2),'#FFC93C');
+          addSplash(f.x,f.y);
+          if(navigator.vibrate)navigator.vibrate(40);
+        }else if(inv<=0){lives--;inv=1.4;addSplash(laneX,playerY);
+          quip={txt:BITE_QUIPS[Math.floor(Math.random()*BITE_QUIPS.length)]};quipT=2.2;
+          if(navigator.vibrate)navigator.vibrate(120);
+          if(lives<=0){gameOver();return;}}
+      }else{
+        const gain=f.kg*(multT>0?2:1);
+        haulKg+=gain;fishes.splice(i,1);
+        addPopup(f.x,f.y-30,'+'+gain.toFixed(1)+'kg = €'+(gain*RATE).toFixed(2),multT>0?'#9BFFB0':'#FFC93C');
+        addSplash(f.x,f.y);
+      }
+    }
+  }
+  // fx
+  for(const p of popups){p.t-=dt;p.y-=40*dt;}
+  popups=popups.filter(p=>p.t>0);
+  for(const s of splashes){s.t-=dt;s.x+=s.vx*dt;s.y+=s.vy*dt;s.vy+=500*dt;}
+  splashes=splashes.filter(s=>s.t>0);
+  // draw
+  drawSea(t);
+  if(land)drawLand();
+  for(const p of powers)drawPower(p,t);
+  for(const f of fishes)drawFish(f,t);
+  drawPlayer(t);
+  if(quip)drawQuip();
+  ctx.fillStyle='rgba(255,255,255,0.85)';
+  for(const s of splashes){ctx.globalAlpha=s.t/0.6;ctx.beginPath();ctx.arc(s.x,s.y,3.4,0,Math.PI*2);ctx.fill();}
+  ctx.globalAlpha=1;
+  for(const p of popups){ctx.globalAlpha=Math.min(1,p.t*2);ctx.fillStyle=p.col;
+    ctx.font='900 16px sans-serif';ctx.textAlign='center';ctx.fillText(p.txt,p.x,p.y);}
+  ctx.globalAlpha=1;
+  drawHUD();
+  requestAnimationFrame(loop);
+}
+
+// ------- storage -------
+async function loadBest(){
+  try{const r=await window.storage.get('lago-save');
+    if(r&&r.value){const d=JSON.parse(r.value);best=d.best||0;playerName=d.name||'';}
+  }catch(e){/* first run */}
+  const el=document.getElementById('bestLine');
+  el.textContent=best>0?('Ρεκόρ σου: €'+(best*RATE).toFixed(2)+' ('+best.toFixed(1)+'kg)'):'';
+  if(playerName)document.getElementById('nameIn').value=playerName;
+}
+async function saveBest(){
+  try{await window.storage.set('lago-save',JSON.stringify({best,name:playerName}));}catch(e){console.error(e);}
+}
+async function submitScore(){
+  if(!playerName)return;
+  try{
+    const key='lb:'+playerName.replace(/[\s\/\\'"]/g,'_');
+    let prev=0;
+    try{const r=await window.storage.get(key,true);if(r&&r.value)prev=JSON.parse(r.value).kg||0;}catch(e){}
+    if(haulKg>prev)await window.storage.set(key,JSON.stringify({name:playerName,kg:haulKg,island:ISLANDS[Math.min(islandIdx,ISLANDS.length-1)],ts:Date.now()}),true);
+  }catch(e){console.error(e);}
+}
+async function renderBoard(){
+  const el=document.getElementById('boardRows');
+  try{
+    const l=await window.storage.list('lb:',true);
+    const rows=[];
+    for(const k of (l&&l.keys?l.keys.slice(0,30):[])){
+      try{const r=await window.storage.get(k,true);if(r&&r.value)rows.push(JSON.parse(r.value));}catch(e){}
+    }
+    rows.sort((a,b)=>b.kg-a.kg);
+    el.innerHTML=rows.slice(0,8).map((r,i)=>
+      '<div class="row'+(r.name===playerName?' me':'')+'"><span>'+(i+1)+'. '+escapeHtml(r.name)+'</span><b>€'+(r.kg*RATE).toFixed(2)+'</b></div>'
+    ).join('')||'<div class="row">Κανείς ακόμα — γίνε ο πρώτος!</div>';
+  }catch(e){el.textContent='Το ταμείο είναι κλειστό (offline).';}
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+// ------- flow -------
+const startScr=document.getElementById('startScr'),overScr=document.getElementById('overScr');
+document.getElementById('playBtn').onclick=start;
+document.getElementById('againBtn').onclick=async()=>{
+  playerName=document.getElementById('nameIn').value.trim().slice(0,14);
+  await saveBest();await submitScore();
+  start();
+};
+document.getElementById('shareBtn').onclick=async()=>{
+  const txt='Έπιασα '+haulKg.toFixed(1)+'kg λαγοκέφαλο = €'+(haulKg*RATE).toFixed(2)+' από το κράτος 💰🐡 Μπορείς να με περάσεις;';
+  try{
+    if(navigator.share){await navigator.share({text:txt});return;}
+  }catch(e){/* user cancelled or blocked — fall through */}
+  try{
+    await navigator.clipboard.writeText(txt);
+    alert('Αντιγράφηκε! 📋 Κάνε paste σε Instagram/WhatsApp/TikTok.');
+  }catch(e){
+    prompt('Αντίγραψέ το χειροκίνητα:',txt);
+  }
+};
+function start(){
+  startScr.classList.add('hidden');overScr.classList.add('hidden');
+  reset();running=true;tPrev=performance.now()/1000;
+  requestAnimationFrame(loop);
+}
+async function gameOver(){
+  running=false;
+  document.getElementById('euroFinal').textContent='€'+(haulKg*RATE).toFixed(2);
+  document.getElementById('haulLine').textContent=haulKg.toFixed(1)+' kg λαγοκέφαλος παραδόθηκε';
+  document.getElementById('islandLine').textContent='Έφτασες μέχρι: '+ISLANDS[Math.min(islandIdx,ISLANDS.length-1)];
+  document.getElementById('deathMsg').textContent='«'+DEATHS[Math.floor(Math.random()*DEATHS.length)]+'»';
+  overScr.classList.remove('hidden');
+  if(haulKg>best){best=haulKg;await saveBest();}
+  playerName=document.getElementById('nameIn').value.trim().slice(0,14)||playerName;
+  await submitScore();
+  renderBoard();
+}
+loadBest();
+})();
+</script>
+</body>
+</html>
