@@ -1,7 +1,19 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+// Resolve the public origin for absolute OG/canonical URLs. Vercel injects
+// VERCEL_PROJECT_PRODUCTION_URL / VERCEL_URL at build time, so this works with
+// zero config; NEXT_PUBLIC_APP_URL is an explicit override (e.g. a custom domain).
+function resolveAppUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_APP_URL;
+  if (explicit) return explicit.startsWith("http") ? explicit : `https://${explicit}`;
+  const vercel =
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
+  if (vercel) return `https://${vercel}`;
+  return "http://localhost:3000";
+}
+
+const APP_URL = resolveAppUrl();
 
 const TITLE = "ΛΑΓΟΚΕΦΑΛΟΣ: Η Επικήρυξη";
 const DESCRIPTION =
