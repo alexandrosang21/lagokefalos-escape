@@ -26,8 +26,13 @@ export const runs = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
+    // rate-limit lookup (latest run per player)
     index("runs_player_id_idx").on(table.playerId),
-    index("runs_euros_idx").on(table.euros),
+    // all-time leaderboard ordering
+    index("runs_euros_idx").on(table.euros.desc()),
     index("runs_created_at_idx").on(table.createdAt),
+    // best-run-per-player: serves DISTINCT ON (player_id) ORDER BY euros DESC
+    // and the GROUP BY player_id MAX(euros) rank query
+    index("runs_player_euros_idx").on(table.playerId, table.euros.desc()),
   ]
 );

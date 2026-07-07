@@ -17,8 +17,12 @@ export async function GET(req: NextRequest) {
   const startOfUtcDay = new Date();
   startOfUtcDay.setUTCHours(0, 0, 0, 0);
 
-  const base = db
-    .select({
+  // Best run per player, in SQL: DISTINCT ON keeps one row per player (the
+  // highest-euro one, per the inner ORDER BY). Doing this in the query instead
+  // of deduping a top-50 slice in JS means one prolific player can't crowd
+  // everyone else off the board — correct regardless of table size.
+  let bestPerPlayer = db
+    .selectDistinctOn([runs.playerId], {
       id: runs.id,
       playerId: runs.playerId,
       name: runs.displayName,
@@ -29,26 +33,22 @@ export async function GET(req: NextRequest) {
     .from(runs)
     .$dynamic();
 
-  const filtered = period === "daily" ? base.where(gte(runs.createdAt, startOfUtcDay)) : base;
-  const rows = await filtered.orderBy(desc(runs.euros)).limit(50);
-
-  // Best run per player only; playerId stays server-side (only a "me" flag
-  // leaves the API).
-  const seen = new Set<string>();
-  const top = [];
-  for (const r of rows) {
-    if (seen.has(r.playerId)) continue;
-    seen.add(r.playerId);
-    top.push({
-      id: r.id,
-      name: r.name || "Ανώνυμος",
-      euros: r.euros,
-      haulKg: r.haulKg,
-      islandIdx: r.islandIdx,
-      me: me !== null && r.playerId === me,
-    });
-    if (top.length >= 10) break;
+  if (period === "daily") {
+    bestPerPlayer = bestPerPlayer.where(gte(runs.createdAt, startOfUtcDay));
   }
+
+  const best = bestPerPlayer.orderBy(runs.playerId, desc(runs.euros)).as("best");
+
+  const rows = await db.select().from(best).orderBy(desc(best.euros)).limit(10);
+
+  const top = rows.map((r) => ({
+    id: r.id,
+    name: r.name || "Ανώνυμος",
+    euros: r.euros,
+    haulKg: r.haulKg,
+    islandIdx: r.islandIdx,
+    me: me !== null && r.playerId === me, // playerId stays server-side; only a flag leaves
+  }));
 
   return NextResponse.json({ period, rows: top });
 }
