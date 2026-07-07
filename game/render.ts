@@ -288,6 +288,7 @@ const P_EMOJI: Record<PowerType, string> = {
   souvlaki: "🥙",
   net: "🕸️",
   cam: "📱",
+  frappe: "🥤",
 };
 
 function drawPower(ctx: Ctx, p: Power, t: number) {
@@ -306,6 +307,40 @@ function drawPower(ctx: Ctx, p: Power, t: number) {
   ctx.fillText(P_EMOJI[p.type], 0, 2);
   ctx.textBaseline = "alphabetic";
   ctx.restore();
+}
+
+// Minimal control hint under the boat for the first seconds of a run.
+function drawHint(ctx: Ctx, e: Engine) {
+  const alpha = Math.min(1, 4 - e.elapsed); // solid until 3s, fades out by 4s
+  if (alpha <= 0) return;
+  ctx.font = "800 14px sans-serif";
+  const pad = 14,
+    tw = ctx.measureText(e.hint).width;
+  const bw = tw + pad * 2,
+    bh = 34;
+  const bx = Math.max(8, Math.min(e.W - bw - 8, e.laneX - bw / 2));
+  const by = e.playerY + 66;
+  ctx.globalAlpha = alpha * 0.92;
+  ctx.fillStyle = "#062A4A";
+  roundRect(ctx, bx, by, bw, bh, 17);
+  ctx.fill();
+  ctx.fillStyle = "#FFC93C";
+  ctx.textAlign = "center";
+  ctx.fillText(e.hint, bx + bw / 2, by + 22);
+  // pulsing chevrons at the boat's sides
+  const pulse = 4 + Math.sin(e.elapsed * 6) * 3;
+  ctx.strokeStyle = "rgba(255,255,255," + 0.85 * alpha + ")";
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  for (const s of [-1, 1]) {
+    const cx = e.laneX + s * (58 + pulse);
+    ctx.beginPath();
+    ctx.moveTo(cx, e.playerY - 12);
+    ctx.lineTo(cx + s * 10, e.playerY);
+    ctx.lineTo(cx, e.playerY + 12);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawQuip(ctx: Ctx, e: Engine) {
@@ -397,6 +432,7 @@ export function render(ctx: Ctx, e: Engine, t: number) {
   for (const p of e.powers) drawPower(ctx, p, t);
   for (const f of e.fishes) drawFish(ctx, f, t);
   drawPlayer(ctx, e, t);
+  if (e.hint && e.elapsed < 4) drawHint(ctx, e);
   if (e.quip) drawQuip(ctx, e);
   ctx.fillStyle = "rgba(255,255,255,0.85)";
   for (const s of e.splashes) {

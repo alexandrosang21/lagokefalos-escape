@@ -1,4 +1,4 @@
-export type PowerType = "freddo" | "souvlaki" | "net" | "cam";
+export type PowerType = "freddo" | "souvlaki" | "net" | "cam" | "frappe";
 
 export interface Fish {
   l: number;
@@ -53,6 +53,8 @@ export interface GameStrings {
     rate: string; // "€5,33/kg"
     invincible: string;
     pose: string;
+    hintTouch: string;
+    hintKeys: string;
   };
   popups: {
     caught: (kg: string, eur: string) => string;
@@ -63,6 +65,8 @@ export interface GameStrings {
     souvlakiFull: string;
     net: string;
     cam: string;
+    frappe: (kg: string, eur: string) => string;
+    frappeEmpty: string;
   };
   ui: {
     presents: string;

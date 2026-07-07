@@ -19,6 +19,8 @@ export const en: GameStrings = {
     "You went viral on TikTok. #lagokefalos #fyp",
     "WWF states: “The media made a mountain out of a molehill.”",
     "The fishermen warned you. You didn't listen.",
+    "A parliamentary committee will investigate the incident. In 4-5 years.",
+    "Your Aegean pasture has been seized by the European Prosecutor.",
   ],
   biteQuips: [
     "OUCH! It bit me!",
@@ -29,6 +31,8 @@ export const en: GameStrings = {
     "Dude, I just ate!",
     "The incident is CONFIRMED!",
     "This wasn't in the holiday package!",
+    "I'm reporting you to the European Prosecutor!",
+    "This fish is declared under three tax IDs!",
   ],
   idleQuips: [
     "Nice little swim...",
@@ -41,11 +45,21 @@ export const en: GameStrings = {
     "New job title: lagokefalos hunter",
     "The Ministry is proud of me 🇬🇷",
     "Think it'll bite me? ...Think so?",
+    "I'll declare the sea as pasture to OPEKEPE 🐐",
+    "Declared the lagokefaloi as livestock",
+    "Looking for the big fish of the case file 🐟",
+    "Bananas on Olympus, lagokefaloi in the Aegean",
+    "Farmer by declaration, jet-skier by trade",
+    "The inquiry committee is the best reality show",
+    "Collecting subsidies, seeing no fish",
+    "Shhh... someone's wiretapping us 📞",
   ],
   hud: {
     rate: "€5.33/kg",
     invincible: "INVINCIBLE",
     pose: "posing",
+    hintTouch: "Drag your finger ← →",
+    hintKeys: "← → arrows or click",
   },
   popups: {
     caught: (kg, eur) => `+${kg}kg = €${eur}`,
@@ -56,6 +70,8 @@ export const en: GameStrings = {
     souvlakiFull: "🥙 +2kg (stuffed)",
     net: "🕸 Net ×2!",
     cam: "📱 Posing for TikTok!",
+    frappe: (kg, eur) => `🥤 FRAPPÉ FRENZY! +${kg}kg = €${eur}`,
+    frappeEmpty: "🥤 FRAPPÉ! The sea is cleared",
   },
   ui: {
     presents: "The Ministry of Rural Development presents*",

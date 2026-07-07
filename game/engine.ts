@@ -26,6 +26,7 @@ export class Engine {
   rng: () => number;
   strings: GameStrings;
   onGameOver: () => void;
+  hint: string;
 
   running = false;
   tPrev = 0;
@@ -67,12 +68,14 @@ export class Engine {
     rng: () => number;
     strings: GameStrings;
     onGameOver: () => void;
+    hint?: string;
   }) {
     this.W = opts.W;
     this.H = opts.H;
     this.rng = opts.rng;
     this.strings = opts.strings;
     this.onGameOver = opts.onGameOver;
+    this.hint = opts.hint ?? "";
     this.reset();
   }
 
@@ -137,7 +140,11 @@ export class Engine {
     this.powerT -= dt;
     if (this.powerT <= 0) {
       this.powerT = 7 + this.rng() * 4;
-      const ty = POWER_TYPES[Math.floor(this.rng() * POWER_TYPES.length)];
+      // frappé is the rare jackpot (~10% of drops); the classic four split the rest
+      const ty: PowerType =
+        this.rng() < 0.1
+          ? "frappe"
+          : POWER_TYPES[Math.floor(this.rng() * POWER_TYPES.length)];
       const pl = Math.floor(this.rng() * LANES);
       this.powers.push({ type: ty, x: this.laneCX(pl), y: -40 });
     }
@@ -197,6 +204,28 @@ export class Engine {
     if (ty === "cam") {
       this.slowT = 2;
       this.addPopup(this.laneX, this.playerY - 60, S.cam, "#fff");
+    }
+    if (ty === "frappe") {
+      // old-school frappé outranks the freddo: clears the whole sea at once,
+      // banking every fish on screen — danger and bounty alike
+      let total = 0;
+      for (const f of this.fishes) {
+        total += f.kg * (this.multT > 0 ? 2 : 1);
+        this.addSplash(f.x, f.y);
+      }
+      this.fishes = [];
+      this.haulKg += total;
+      this.inv = Math.max(this.inv, 1.5); // a fresh spawn shouldn't bite mid-celebration
+      this.addPopup(
+        this.laneX,
+        this.playerY - 60,
+        total > 0
+          ? S.frappe(total.toFixed(1), (total * RATE).toFixed(2))
+          : S.frappeEmpty,
+        "#FFC93C"
+      );
+      vibrate(80);
+      return;
     }
     vibrate(30);
   }

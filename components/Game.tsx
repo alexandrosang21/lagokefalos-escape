@@ -196,6 +196,7 @@ export default function Game() {
       rng: makeRng(dailyRef.current),
       strings,
       onGameOver: () => handleGameOver(engine),
+      hint: "ontouchstart" in window ? strings.hud.hintTouch : strings.hud.hintKeys,
     });
     engineRef.current = engine;
     setScreen("playing");

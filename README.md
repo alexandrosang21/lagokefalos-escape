@@ -61,6 +61,15 @@ Clients can't fabricate scores; users only contribute a display name:
 - **Catch assist**: bounty fish and power-ups (never danger fish) within
   ~90px vertically and just outside the catch box get gently magnetized to
   the boat, so honest near-misses connect on both arrows and touch
+- **🥤 Frappé**: rare jackpot power-up (~10% of drops) — the old-school
+  frappé outranks the freddo and clears every fish on screen, banking all
+  their kilos (×2 net applies); grants 1.5s of invincibility
+- **Control hint**: first 4 seconds of a run show pulsing chevrons + a
+  drag/arrows pill under the boat (touch vs keyboard auto-detected)
+- **Scandal quips**: idle/bite quips and death messages reference the
+  ΟΠΕΚΕΠΕ subsidy scandal (sea pastures, inquiry-committee-as-reality-show)
+  — institutions and meme concepts only, no real persons, per the spec's
+  parody rule
 
 ## Still on the polish list (spec §7.5)
 
