@@ -3,21 +3,40 @@ import "./globals.css";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
+const TITLE = "ΛΑΓΟΚΕΦΑΛΟΣ: Η Επικήρυξη";
+const DESCRIPTION =
+  "Endless runner στο Αιγαίο: μάζεψε τους μικρούς λαγοκέφαλους, απόφυγε τους μεγάλους — €5,33 το κιλό από το κράτος. Δωρεάν, στο κινητό. Παρωδία.";
+const OG_IMAGE = {
+  url: "/og-cover.png",
+  width: 1200,
+  height: 630,
+  alt: "ΛΑΓΟΚΕΦΑΛΟΣ: Η Επικήρυξη — κυνήγα την επικήρυξη των €5,33/κιλό",
+};
+
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
-  title: "ΛΑΓΟΚΕΦΑΛΟΣ: Η Επικήρυξη",
-  description:
-    "Απόφυγε τους μεγάλους λαγοκέφαλους, μάζεψε τους μικρούς — €5,33 το κιλό από το κράτος. Παρωδία.",
+  title: TITLE,
+  description: DESCRIPTION,
+  applicationName: "Λαγοκέφαλος",
+  keywords: ["λαγοκέφαλος", "lagokefalos", "παιχνίδι", "game", "Αιγαίο", "meme", "Ελλάδα"],
+  category: "games",
   manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Λαγοκέφαλος", statusBarStyle: "black-translucent" },
+  alternates: { canonical: "/" },
   openGraph: {
-    title: "ΛΑΓΟΚΕΦΑΛΟΣ: Η Επικήρυξη",
-    description: "Κυνήγα την επικήρυξη των €5,33/κιλό στο Αιγαίο 🐡💰",
     type: "website",
+    siteName: TITLE,
+    locale: "el_GR",
+    url: "/",
+    title: TITLE,
+    description: "Κυνήγα την επικήρυξη των €5,33/κιλό στο Αιγαίο 🐡💰",
+    images: [OG_IMAGE],
   },
   twitter: {
     card: "summary_large_image",
-    title: "ΛΑΓΟΚΕΦΑΛΟΣ: Η Επικήρυξη",
+    title: TITLE,
     description: "Κυνήγα την επικήρυξη των €5,33/κιλό στο Αιγαίο 🐡💰",
+    images: [OG_IMAGE.url],
   },
 };
 
