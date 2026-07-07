@@ -1,7 +1,8 @@
 "use client";
 
 import { Engine, RATE } from "@/game/engine";
-import { render } from "@/game/render";
+import { islandName } from "@/game/islands";
+import { drawFishPreview, render } from "@/game/render";
 import { makeRng } from "@/game/rng";
 import { el } from "@/game/strings.el";
 import { en } from "@/game/strings.en";
@@ -33,6 +34,23 @@ type BoardState =
   | { status: "ready"; rows: BoardRow[] };
 
 const STRINGS: Record<Lang, GameStrings> = { el, en };
+
+// Mini canvas showing the real in-game fish art on the start screen.
+function FishPreview({ danger }: { danger: boolean }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const cv = ref.current;
+    if (!cv) return;
+    const SIZE = 72;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = SIZE * dpr;
+    cv.height = SIZE * dpr;
+    const ctx = cv.getContext("2d")!;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawFishPreview(ctx, danger, SIZE);
+  }, [danger]);
+  return <canvas ref={ref} className="howto-canvas" style={{ width: 72, height: 72 }} />;
+}
 
 export default function Game() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -166,7 +184,7 @@ export default function Game() {
   const handleGameOver = useCallback(
     async (e: Engine) => {
       const strings = e.strings;
-      const island = strings.islands[Math.min(e.islandIdx, strings.islands.length - 1)];
+      const island = islandName(strings.islands, e.islandIdx);
       const death = strings.deaths[Math.floor(Math.random() * strings.deaths.length)];
       const kg = e.haulKg;
       setOver({ kg, euros: kg * RATE, island, death, runId: null, rank: null });
@@ -330,11 +348,21 @@ export default function Game() {
             <span className="sub">{S.ui.subtitle}</span>
           </h1>
           <div className="bounty">{S.ui.bounty}</div>
+          <div className="howto">
+            <div className="howto-card collect">
+              <div className="howto-badge">✓</div>
+              <FishPreview danger={false} />
+              <div className="howto-title">{S.ui.howToCollect}</div>
+              <div className="howto-sub">{S.ui.howToCollectSub}</div>
+            </div>
+            <div className="howto-card avoid">
+              <div className="howto-badge">✗</div>
+              <FishPreview danger={true} />
+              <div className="howto-title">{S.ui.howToAvoid}</div>
+              <div className="howto-sub">{S.ui.howToAvoidSub}</div>
+            </div>
+          </div>
           <div className="note">
-            {S.ui.howTo1}
-            <br />
-            {S.ui.howTo2}
-            <br />
             <b>{S.ui.howTo3}</b>
           </div>
           <button className="btn" onClick={start}>

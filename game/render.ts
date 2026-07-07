@@ -1,5 +1,6 @@
 import { Engine, LANES, RATE } from "./engine";
-import type { Fish, Power, PowerType } from "./types";
+import { islandName } from "./islands";
+import type { Fish, IslandTheme, Power, PowerType } from "./types";
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -187,6 +188,14 @@ function drawFish(ctx: Ctx, f: Fish, t: number) {
   ctx.restore();
 }
 
+// Draws a single centered fish at CSS size `size` — used by the on-boarding
+// "eat small / avoid big" cards so they show the exact in-game art.
+// drawFish already translates to the fish's (x,y), so we pass the canvas center.
+export function drawFishPreview(ctx: Ctx, danger: boolean, size: number) {
+  const r = danger ? size * 0.3 : size * 0.24;
+  drawFish(ctx, { x: size / 2, y: size / 2, danger, kg: 1, r, flap: 1.2, drift: 0, l: 0 }, 0.35);
+}
+
 function drawPlayer(ctx: Ctx, e: Engine, t: number) {
   const x = e.laneX,
     y = e.playerY;
@@ -252,32 +261,171 @@ function coastPath(ctx: Ctx, e: Engine, k: number) {
   ctx.closePath();
 }
 
+// Per-theme coastline palettes; vegK is how far the greenery reaches.
+const LAND_PAL: Record<IslandTheme, { sand: string; veg: string; vegK: number }> = {
+  cycladic: { sand: "#EAD9A8", veg: "#B9C98A", vegK: 0.55 },
+  windmill: { sand: "#EAD9A8", veg: "#B9C98A", vegK: 0.55 },
+  volcanic: { sand: "#8B7A6E", veg: "#6E5D52", vegK: 0.6 },
+  green: { sand: "#E6DCAE", veg: "#6FA36B", vegK: 0.75 },
+  port: { sand: "#E5D3A8", veg: "#A8BD86", vegK: 0.5 },
+  beach: { sand: "#F2E3B4", veg: "#C9D49A", vegK: 0.32 },
+  lighthouse: { sand: "#C9BFA8", veg: "#9AA382", vegK: 0.45 },
+};
+
 function drawLand(ctx: Ctx, e: Engine) {
   const land = e.land!;
+  const pal = LAND_PAL[land.theme];
   coastPath(ctx, e, 1.3);
   ctx.fillStyle = "rgba(140,224,229,0.55)"; // shallows
   ctx.fill();
   coastPath(ctx, e, 1);
-  ctx.fillStyle = "#EAD9A8"; // sand
+  ctx.fillStyle = pal.sand;
   ctx.fill();
-  coastPath(ctx, e, 0.55);
-  ctx.fillStyle = "#B9C98A"; // greenery
+  coastPath(ctx, e, pal.vegK);
+  ctx.fillStyle = pal.veg;
   ctx.fill();
-  // Cycladic houses at the middle of the island
+  if (land.theme === "volcanic") {
+    // dark caldera cliff core
+    coastPath(ctx, e, 0.38);
+    ctx.fillStyle = "#4A3E38";
+    ctx.fill();
+  }
+  if (land.theme === "green") {
+    coastPath(ctx, e, 0.35);
+    ctx.fillStyle = "#4F7D4F";
+    ctx.fill();
+  }
+
   const s = land.side,
     edge = s < 0 ? 0 : e.W,
     wMax = e.W * 0.16;
   const midY = land.y + land.len / 2;
-  if (midY > -60 && midY < e.H + 60) {
-    for (let h = 0; h < 3; h++) {
-      const hy = midY + (h - 1) * 36,
-        hx = edge - s * (wMax * 0.32 + h * 7);
+  if (midY < -60 || midY > e.H + 60) return;
+  const dx = (k: number) => edge - s * (wMax * k); // distance inland from the screen edge
+
+  switch (land.theme) {
+    case "cycladic": {
+      // white sugar-cube houses with blue domes
+      for (let h = 0; h < 3; h++) {
+        const hy = midY + (h - 1) * 36,
+          hx = dx(0.32) - s * h * 7;
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(hx - 8, hy - 6, 16, 12);
+        ctx.fillStyle = "#2C63A8";
+        ctx.beginPath();
+        ctx.arc(hx, hy - 6, 7, Math.PI, 0);
+        ctx.fill();
+      }
+      break;
+    }
+    case "volcanic": {
+      // tiny white village strung along the dark caldera rim
       ctx.fillStyle = "#FFFFFF";
-      ctx.fillRect(hx - 8, hy - 6, 16, 12);
-      ctx.fillStyle = "#2C63A8";
+      for (let h = 0; h < 5; h++) {
+        const hy = midY + (h - 2) * 22,
+          hx = dx(0.42) - s * Math.sin(h * 1.7 + land.seed) * 6;
+        ctx.fillRect(hx - 4, hy - 3, 8, 6);
+      }
+      break;
+    }
+    case "green": {
+      // cypress trees
+      for (let h = 0; h < 4; h++) {
+        const hy = midY + (h - 1.5) * 30,
+          hx = dx(0.3) - s * (h % 2) * 12;
+        ctx.fillStyle = "#5C4327";
+        ctx.fillRect(hx - 1.5, hy + 8, 3, 6);
+        ctx.fillStyle = "#2F5D3A";
+        ctx.beginPath();
+        ctx.moveTo(hx, hy - 16);
+        ctx.lineTo(hx - 6, hy + 9);
+        ctx.lineTo(hx + 6, hy + 9);
+        ctx.closePath();
+        ctx.fill();
+      }
+      break;
+    }
+    case "port": {
+      // pastel neoclassical waterfront row
+      const walls = ["#F2A48D", "#F5D394", "#A8CBE8"];
+      for (let h = 0; h < 3; h++) {
+        const hy = midY + (h - 1) * 34,
+          hx = dx(0.28);
+        ctx.fillStyle = walls[h % walls.length];
+        ctx.fillRect(hx - 9, hy - 5, 18, 13);
+        ctx.fillStyle = "#A9502F";
+        ctx.beginPath();
+        ctx.moveTo(hx - 11, hy - 5);
+        ctx.lineTo(hx, hy - 13);
+        ctx.lineTo(hx + 11, hy - 5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#3A2E24";
+        ctx.fillRect(hx - 2, hy + 2, 4, 6);
+      }
+      break;
+    }
+    case "windmill": {
+      // two windmills with crossed sails
+      for (let h = 0; h < 2; h++) {
+        const hy = midY + (h - 0.5) * 46,
+          hx = dx(0.34) - s * h * 9;
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(hx - 6, hy - 8, 12, 18);
+        ctx.fillStyle = "#8A5A3B";
+        ctx.beginPath();
+        ctx.moveTo(hx - 8, hy - 8);
+        ctx.lineTo(hx, hy - 16);
+        ctx.lineTo(hx + 8, hy - 8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "#F5EFE0";
+        ctx.lineWidth = 2;
+        for (let b = 0; b < 4; b++) {
+          const a = (Math.PI / 4) * (1 + 2 * b) + land.seed;
+          ctx.beginPath();
+          ctx.moveTo(hx, hy - 10);
+          ctx.lineTo(hx + Math.cos(a) * 12, hy - 10 + Math.sin(a) * 12);
+          ctx.stroke();
+        }
+      }
+      break;
+    }
+    case "beach": {
+      // beach umbrellas on wide sand
+      const tops = ["#FF5A4E", "#FFC93C", "#2E9BD6"];
+      for (let h = 0; h < 3; h++) {
+        const hy = midY + (h - 1) * 32,
+          hx = dx(0.5) - s * (h % 2) * 10;
+        ctx.strokeStyle = "#8A6A45";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(hx, hy - 6);
+        ctx.lineTo(hx, hy + 8);
+        ctx.stroke();
+        ctx.fillStyle = tops[h % tops.length];
+        ctx.beginPath();
+        ctx.arc(hx, hy - 4, 9, Math.PI, 0);
+        ctx.fill();
+      }
+      break;
+    }
+    case "lighthouse": {
+      // lone striped lighthouse with its light on
+      const hx = dx(0.4),
+        hy = midY;
+      ctx.fillStyle = "rgba(255,222,120,0.35)";
       ctx.beginPath();
-      ctx.arc(hx, hy - 6, 7, Math.PI, 0);
+      ctx.arc(hx, hy - 16, 14, 0, Math.PI * 2);
       ctx.fill();
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(hx - 5, hy - 12, 10, 26);
+      ctx.fillStyle = "#D64541";
+      ctx.fillRect(hx - 5, hy - 6, 10, 5);
+      ctx.fillRect(hx - 5, hy + 4, 10, 5);
+      ctx.fillStyle = "#FFDE78";
+      ctx.fillRect(hx - 3, hy - 16, 6, 4);
+      break;
     }
   }
 }
@@ -390,7 +538,7 @@ function drawHUD(ctx: Ctx, e: Engine) {
   ctx.fillStyle = "#BFE0F5";
   ctx.font = "700 11px sans-serif";
   ctx.textAlign = "right";
-  const island = e.strings.islands[Math.min(e.islandIdx, e.strings.islands.length - 1)];
+  const island = islandName(e.strings.islands, e.islandIdx);
   ctx.fillText(island + " · " + Math.floor(e.dist) + "m", W - 22, 57);
   // active effects
   const eff: string[] = [];

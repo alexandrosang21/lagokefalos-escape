@@ -1,3 +1,4 @@
+import { islandName } from "@/game/islands";
 import { el } from "@/game/strings.el";
 import { db, isDbConfigured } from "@/lib/db";
 import { loadGreekFont, OG_SIZE, ogCard } from "@/lib/og";
@@ -16,7 +17,7 @@ export async function GET(
   const [run] = await db.select().from(runs).where(eq(runs.id, runId)).limit(1);
   if (!run) return new Response("not found", { status: 404 });
 
-  const island = el.islands[Math.min(run.islandIdx, el.islands.length - 1)];
+  const island = islandName(el.islands, run.islandIdx);
   const rank = await getRankForEuros(run.euros);
   const eyebrow = "ΕΠΙΣΗΜΗ ΑΠΟΔΕΙΞΗ ΕΠΙΚΗΡΥΞΗΣ";
   const big = `€${run.euros.toFixed(2)}`;

@@ -66,6 +66,13 @@ Clients can't fabricate scores; users only contribute a display name:
   their kilos (×2 net applies); grants 1.5s of invincibility
 - **Control hint**: first 4 seconds of a run show pulsing chevrons + a
   drag/arrows pill under the boat (touch vs keyboard auto-detected)
+- **Visual how-to**: the start screen shows two cards rendering the real
+  in-game fish art — green ✓ "collect" (small bounty) vs red ✗ "avoid"
+  (big danger) — so the rules read at a glance without text
+- **50 islands, 7 coastline themes**: `game/islands.ts` is the single source
+  of names (EL/EN) + art theme (cycladic domes, volcanic caldera, cypress
+  green, pastel port, windmills, beach umbrellas, lighthouse). The chain
+  loops (modulo) so islands stop repeating early
 - **Scandal quips**: idle/bite quips and death messages reference the
   ΟΠΕΚΕΠΕ subsidy scandal (sea pastures, inquiry-committee-as-reality-show)
   — institutions and meme concepts only, no real persons, per the spec's

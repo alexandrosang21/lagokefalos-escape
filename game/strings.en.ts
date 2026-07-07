@@ -1,18 +1,8 @@
+import { ISLANDS } from "./islands";
 import type { GameStrings } from "./types";
 
 export const en: GameStrings = {
-  islands: [
-    "CRETE",
-    "SANTORINI",
-    "IOS",
-    "PAROS",
-    "NAXOS",
-    "MYKONOS",
-    "TINOS",
-    "ANDROS",
-    "SYROS",
-    "MILOS",
-  ],
+  islands: ISLANDS.map((i) => i.en),
   deaths: [
     "It bit you! The Red Cross recommends: wash the wound with plenty of water and soap.",
     "ELKETHE clarifies: the incident is not confirmed.",
@@ -57,7 +47,7 @@ export const en: GameStrings = {
   hud: {
     rate: "€5.33/kg",
     invincible: "INVINCIBLE",
-    pose: "posing",
+    pose: "selfie",
     hintTouch: "Drag your finger ← →",
     hintKeys: "← → arrows or click",
   },
@@ -69,7 +59,7 @@ export const en: GameStrings = {
     souvlakiLife: "🥙 +1 life!",
     souvlakiFull: "🥙 +2kg (stuffed)",
     net: "🕸 Net ×2!",
-    cam: "📱 Posing for TikTok!",
+    cam: "📱 Stopped for a selfie!",
     frappe: (kg, eur) => `🥤 FRAPPÉ FRENZY! +${kg}kg = €${eur}`,
     frappeEmpty: "🥤 FRAPPÉ! The sea is cleared",
   },
@@ -81,6 +71,10 @@ export const en: GameStrings = {
     howTo1: "Dodge the big lagokefaloi 🐡",
     howTo2: "Grab the small ones for the bounty 💶",
     howTo3: "Drag ← → to change lane",
+    howToCollect: "COLLECT",
+    howToCollectSub: "small = €5.33/kg",
+    howToAvoid: "AVOID",
+    howToAvoidSub: "big = they bite!",
     play: "START",
     daily: "🗓 Daily challenge (same sea for everyone)",
     bestPrefix: (eur, kg) => `Your best: €${eur} (${kg}kg)`,

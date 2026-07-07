@@ -1,4 +1,5 @@
 import { RATE } from "@/game/engine";
+import { islandName } from "@/game/islands";
 import { el } from "@/game/strings.el";
 import { db, isDbConfigured } from "@/lib/db";
 import { getRankForEuros } from "@/lib/rank";
@@ -50,7 +51,7 @@ export default async function RunPage({
   const run = await getRun(runId);
   if (!run) notFound();
 
-  const island = el.islands[Math.min(run.islandIdx, el.islands.length - 1)];
+  const island = islandName(el.islands, run.islandIdx);
   const rank = await getRankForEuros(run.euros);
 
   return (

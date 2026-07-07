@@ -1,18 +1,8 @@
+import { ISLANDS } from "./islands";
 import type { GameStrings } from "./types";
 
 export const el: GameStrings = {
-  islands: [
-    "ΚΡΗΤΗ",
-    "ΣΑΝΤΟΡΙΝΗ",
-    "ΙΟΣ",
-    "ΠΑΡΟΣ",
-    "ΝΑΞΟΣ",
-    "ΜΥΚΟΝΟΣ",
-    "ΤΗΝΟΣ",
-    "ΑΝΔΡΟΣ",
-    "ΣΥΡΟΣ",
-    "ΜΗΛΟΣ",
-  ],
+  islands: ISLANDS.map((i) => i.el),
   deaths: [
     "Σε δάγκωσε! Ο Ερυθρός Σταυρός συνιστά: καθάρισε την πληγή με άφθονο νερό και σαπούνι.",
     "Το ΕΛΚΕΘΕ διευκρινίζει: το περιστατικό δεν επιβεβαιώνεται.",
@@ -57,7 +47,7 @@ export const el: GameStrings = {
   hud: {
     rate: "€5,33/kg",
     invincible: "ΑΤΡΩΤΟΣ",
-    pose: "πόζα",
+    pose: "selfie",
     hintTouch: "Σύρε το δάχτυλο ← →",
     hintKeys: "← → βέλη ή κλικ",
   },
@@ -69,7 +59,7 @@ export const el: GameStrings = {
     souvlakiLife: "🥙 +1 ζωή!",
     souvlakiFull: "🥙 +2kg (χορτάτος)",
     net: "🕸 Δίχτυ ×2!",
-    cam: "📱 Ποζάρουν για TikTok!",
+    cam: "📱 Σταμάτησαν για selfie!",
     frappe: (kg, eur) => `🥤 ΦΡΑΠΕΔΙΑ! +${kg}kg = €${eur}`,
     frappeEmpty: "🥤 ΦΡΑΠΕΣ! Η θάλασσα καθάρισε",
   },
@@ -81,6 +71,10 @@ export const el: GameStrings = {
     howTo1: "Απόφυγε τους μεγάλους λαγοκέφαλους 🐡",
     howTo2: "Μάζεψε τους μικρούς για την επικήρυξη 💶",
     howTo3: "Σύρε ← → για να αλλάξεις λωρίδα",
+    howToCollect: "ΜΑΖΕΨΕ",
+    howToCollectSub: "μικρά = €5,33/kg",
+    howToAvoid: "ΑΠΟΦΥΓΕ",
+    howToAvoidSub: "μεγάλα = δαγκώνουν!",
     play: "ΞΕΚΙΝΑ",
     daily: "🗓 Ημερήσια πρόκληση (ίδια θάλασσα για όλους)",
     bestPrefix: (eur, kg) => `Ρεκόρ σου: €${eur} (${kg}kg)`,

@@ -33,11 +33,21 @@ export interface Splash {
   t: number;
 }
 
+export type IslandTheme =
+  | "cycladic"
+  | "volcanic"
+  | "green"
+  | "port"
+  | "windmill"
+  | "beach"
+  | "lighthouse";
+
 export interface Land {
   side: 1 | -1;
   y: number;
   len: number;
   seed: number;
+  theme: IslandTheme;
 }
 
 export interface Quip {
@@ -76,6 +86,10 @@ export interface GameStrings {
     howTo1: string;
     howTo2: string;
     howTo3: string;
+    howToCollect: string;
+    howToCollectSub: string;
+    howToAvoid: string;
+    howToAvoidSub: string;
     play: string;
     daily: string;
     bestPrefix: (eur: string, kg: string) => string;

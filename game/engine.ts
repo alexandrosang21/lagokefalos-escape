@@ -1,3 +1,4 @@
+import { islandName, islandTheme } from "./islands";
 import type {
   Fish,
   GameStrings,
@@ -247,14 +248,14 @@ export class Engine {
     if (this.dist >= this.nextIslandAt) {
       this.islandIdx++;
       this.nextIslandAt += 400 + this.islandIdx * 80;
-      this.bannerTxt =
-        this.strings.islands[Math.min(this.islandIdx, this.strings.islands.length - 1)];
+      this.bannerTxt = islandName(this.strings.islands, this.islandIdx);
       this.bannerT = 1.6;
       this.land = {
         side: this.rng() < 0.5 ? -1 : 1,
         y: -this.H * 1.1,
         len: this.H * 1.05,
         seed: Math.floor(this.rng() * 99),
+        theme: islandTheme(this.islandIdx),
       };
       this.addPopup(this.W / 2, this.H * 0.42, this.strings.popups.speedUp, "#fff");
     }
