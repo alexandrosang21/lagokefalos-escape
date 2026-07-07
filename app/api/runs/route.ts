@@ -8,7 +8,6 @@ import { and, desc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 const MAX_DURATION_S = 1800; // longer than any human run of this game
-const MAX_HAUL_KG = 2000; // absolute ceiling regardless of duration
 const MAX_KG_PER_S = 8; // sustained freddo-smashing with ×2 net peaks below this
 const MAX_METERS_PER_S = 40; // top speed is ~38 m/s with freddo
 const MIN_POST_INTERVAL_MS = 5000;
@@ -69,7 +68,10 @@ export async function POST(req: NextRequest) {
   if (durationS < 3 || durationS > MAX_DURATION_S) {
     return NextResponse.json({ error: "implausible_duration" }, { status: 400 });
   }
-  if (haulKg < 0 || haulKg > Math.min(40 + durationS * MAX_KG_PER_S, MAX_HAUL_KG)) {
+  // No flat ceiling: the cap scales with server-measured play time, so a real
+  // marathon run can score high while a fabricated haul (posted seconds after
+  // start, or wildly above the per-second rate) is still rejected.
+  if (haulKg < 0 || haulKg > 40 + durationS * MAX_KG_PER_S) {
     return NextResponse.json({ error: "implausible_haul" }, { status: 400 });
   }
   if (
