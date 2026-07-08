@@ -3,11 +3,20 @@
 // to satisfy browser autoplay policies.
 import type { IslandTheme } from "./types";
 
-export type SfxName = "catch" | "bite" | "power" | "frappe" | "island" | "gameover";
+export type SfxName =
+  | "catch"
+  | "bite"
+  | "power"
+  | "frappe"
+  | "island"
+  | "gameover"
+  | "boss";
 
 const STORAGE_KEY = "lago-muted";
 const MASTER_GAIN = 0.35;
-const SFX_LEVEL = 0.16; // sound effects sit on their own quieter bus under master
+// SFX bus at full level — individual effects set their own peaks. Only the
+// per-fish "catch" blip is deliberately soft since it fires constantly.
+const SFX_LEVEL = 1;
 
 // ---- generative music ----
 // A soft looping bed (bass + arpeggio) synthesised on the fly. Each island art
@@ -181,6 +190,11 @@ export class GameAudio {
         this.blip(440, 0.18, "triangle", 0.26, 0);
         this.blip(330, 0.2, "triangle", 0.26, 0.16);
         this.blip(220, 0.34, "triangle", 0.26, 0.34);
+        break;
+      case "boss": // menacing low two-tone + rumble — the ΜΕΓΑΣ rises
+        this.blip(98, 0.3, "sawtooth", 0.3, 0);
+        this.blip(73.4, 0.5, "sawtooth", 0.3, 0.22);
+        this.noise(0.55, 0.16, 160, 0.1);
         break;
     }
   }

@@ -195,6 +195,22 @@ export function drawFishPreview(ctx: Ctx, danger: boolean, size: number) {
   drawFish(ctx, { x: size / 2, y: size / 2, danger, kg: 1, r, flap: 1.2, drift: 0, l: 0 }, 0.35);
 }
 
+// The ΜΕΓΑΣ ΛΑΓΟΚΕΦΑΛΟΣ — same rabbit-faced art, boss-sized. While it
+// telegraphs, the target lane pulses red so the lunge is readable.
+function drawBoss(ctx: Ctx, e: Engine, t: number) {
+  const b = e.boss!;
+  if (b.state === "telegraph") {
+    const m = e.W * 0.14,
+      w = (e.W - 2 * m) / LANES;
+    ctx.fillStyle = `rgba(255,90,78,${0.14 + 0.1 * Math.sin(t * 14)})`;
+    ctx.fillRect(m + w * b.targetLane, 0, w, e.H);
+  }
+  ctx.save();
+  if (b.state === "retreat") ctx.globalAlpha = 0.4; // diving back under
+  drawFish(ctx, { x: b.x, y: b.y, danger: true, kg: 99, r: b.r, flap: 2, drift: 0, l: b.targetLane }, t);
+  ctx.restore();
+}
+
 function drawPlayer(ctx: Ctx, e: Engine, t: number) {
   const x = e.laneX,
     y = e.playerY;
@@ -434,7 +450,8 @@ const P_EMOJI: Record<PowerType, string> = {
   freddo: "☕",
   souvlaki: "🥙",
   net: "🕸️",
-  cam: "📱",
+  mati: "🧿",
+  magnet: "🧲",
   frappe: "🥤",
 };
 
@@ -543,7 +560,9 @@ function drawHUD(ctx: Ctx, e: Engine) {
   const eff: string[] = [];
   if (e.freddoT > 0) eff.push("☕ " + e.strings.hud.invincible + " " + Math.ceil(e.freddoT));
   if (e.multT > 0) eff.push("🕸 ×2 " + Math.ceil(e.multT));
-  if (e.slowT > 0) eff.push("📱 " + e.strings.hud.pose);
+  if (e.matiT > 0) eff.push("🧿 " + Math.ceil(e.matiT));
+  if (e.magnetT > 0) eff.push("🧲 " + Math.ceil(e.magnetT));
+  if (e.comboMult() > 1) eff.push("🔥 ×" + e.comboMult());
   if (eff.length) {
     ctx.textAlign = "left";
     ctx.font = "700 13px sans-serif";
@@ -578,6 +597,7 @@ export function render(ctx: Ctx, e: Engine, t: number) {
   if (e.land) drawLand(ctx, e);
   for (const p of e.powers) drawPower(ctx, p, t);
   for (const f of e.fishes) drawFish(ctx, f, t);
+  if (e.boss) drawBoss(ctx, e, t);
   drawPlayer(ctx, e, t);
   if (e.hint && e.elapsed < 4) drawHint(ctx, e);
   if (e.quip) drawQuip(ctx, e);

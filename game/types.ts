@@ -1,4 +1,4 @@
-export type PowerType = "freddo" | "souvlaki" | "net" | "cam" | "frappe";
+export type PowerType = "freddo" | "souvlaki" | "net" | "mati" | "magnet" | "frappe";
 
 export interface Fish {
   l: number;
@@ -9,6 +9,18 @@ export interface Fish {
   r: number;
   flap: number;
   drift: number;
+}
+
+// The ΜΕΓΑΣ ΛΑΓΟΚΕΦΑΛΟΣ — appears every 5th island. It hovers at the top,
+// telegraphs a lane, lunges down it, then swims back up for the next pass.
+export interface Boss {
+  x: number;
+  y: number;
+  r: number;
+  targetLane: number;
+  state: "enter" | "telegraph" | "lunge" | "retreat";
+  t: number; // countdown within the current state (telegraph flash)
+  lungesLeft: number;
 }
 
 export interface Power {
@@ -62,7 +74,6 @@ export interface GameStrings {
   hud: {
     rate: string; // "€5,33/kg"
     invincible: string;
-    pose: string;
     hintTouch: string;
     hintKeys: string;
   };
@@ -74,9 +85,15 @@ export interface GameStrings {
     souvlakiLife: string;
     souvlakiFull: string;
     net: string;
-    cam: string;
+    mati: string;
+    matiSaved: string;
+    magnet: string;
     frappe: (kg: string, eur: string) => string;
     frappeEmpty: string;
+    combo: (mult: string) => string;
+    bossWarn: string;
+    bossDown: (kg: string, eur: string) => string;
+    bossSmash: string;
   };
   ui: {
     presents: string;

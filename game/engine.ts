@@ -1,6 +1,7 @@
 import type { SfxName } from "./audio";
 import { IDENTITY_ORDER, islandName, islandTheme } from "./islands";
 import type {
+  Boss,
   Fish,
   GameStrings,
   IslandTheme,
@@ -15,7 +16,7 @@ import type {
 export const RATE = 5.33;
 export const LANES = 3;
 
-const POWER_TYPES: PowerType[] = ["freddo", "souvlaki", "net", "cam"];
+const POWER_TYPES: PowerType[] = ["freddo", "souvlaki", "net", "mati", "magnet"];
 
 function vibrate(ms: number) {
   if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(ms);
@@ -58,12 +59,16 @@ export class Engine {
   popups: Popup[] = [];
   powers: Power[] = [];
   land: Land | null = null;
+  // combo streak: catches build it, a bite resets it
+  combo = 0;
+  boss: Boss | null = null;
   bannerT = 0;
   bannerTxt = "";
 
   freddoT = 0;
   multT = 0;
-  slowT = 0;
+  matiT = 0; // evil-eye charm: blocks the next bite while > 0
+  magnetT = 0; // longline: bounty fish get reeled toward the player
   powerT = 6;
   spawnT = 0;
 
@@ -149,6 +154,8 @@ export class Engine {
     this.splashes = [];
     this.popups = [];
     this.powers = [];
+    this.combo = 0;
+    this.boss = null;
     // start with the departure island's shore behind the player, so a run reads
     // as "launching from Crete" (or the daily route's first island); it recedes
     // off the bottom in the first seconds. Deterministic decoration (no rng) so
@@ -163,7 +170,8 @@ export class Engine {
     };
     this.freddoT = 0;
     this.multT = 0;
-    this.slowT = 0;
+    this.matiT = 0;
+    this.magnetT = 0;
     this.powerT = 5;
     this.spawnT = 0;
     this.quip = null;
@@ -249,9 +257,13 @@ export class Engine {
       this.multT = 5;
       this.addPopup(this.laneX, this.playerY - 60, S.net, "#9BFFB0");
     }
-    if (ty === "cam") {
-      this.slowT = 2;
-      this.addPopup(this.laneX, this.playerY - 60, S.cam, "#fff");
+    if (ty === "mati") {
+      this.matiT = 8;
+      this.addPopup(this.laneX, this.playerY - 60, S.mati, "#7FD4FF");
+    }
+    if (ty === "magnet") {
+      this.magnetT = 5;
+      this.addPopup(this.laneX, this.playerY - 60, S.magnet, "#9BFFB0");
     }
     if (ty === "frappe") {
       // old-school frappé outranks the freddo: clears the whole sea at once,
@@ -280,6 +292,134 @@ export class Engine {
     this.sfx("power");
   }
 
+  // Combo streak multiplier on every bounty gain: ×1.5 from 8, ×2 from 16.
+  // Modest caps on purpose — the leaderboard measures kg, keep inflation sane.
+  comboMult(): number {
+    return this.combo >= 16 ? 2 : this.combo >= 8 ? 1.5 : 1;
+  }
+
+  private bumpCombo(n: number) {
+    const before = this.comboMult();
+    this.combo += n;
+    const after = this.comboMult();
+    if (after > before)
+      this.addPopup(this.laneX, this.playerY - 84, this.strings.popups.combo(String(after)), "#FF9F43");
+  }
+
+  // Shared "the player got bitten" path (danger fish + boss lunges).
+  // Returns true if the run just ended.
+  private bitePlayer(): boolean {
+    if (this.matiT > 0) {
+      // the evil-eye charm eats the bite: no life lost, combo survives
+      this.matiT = 0;
+      this.inv = 1.0; // brief grace so the same fish can't instantly re-bite
+      this.addPopup(this.laneX, this.playerY - 60, this.strings.popups.matiSaved, "#7FD4FF");
+      this.addSplash(this.laneX, this.playerY);
+      vibrate(60);
+      this.sfx("power");
+      return false;
+    }
+    this.lives--;
+    this.inv = 1.4;
+    this.combo = 0;
+    this.addSplash(this.laneX, this.playerY);
+    const q = this.strings.biteQuips;
+    this.quip = { txt: q[Math.floor(this.rng() * q.length)] };
+    this.quipT = 2.2;
+    vibrate(120);
+    this.sfx("bite");
+    if (this.lives <= 0) {
+      this.running = false;
+      this.sfx("gameover");
+      this.onGameOver();
+      return true;
+    }
+    return false;
+  }
+
+  // ---- ΜΕΓΑΣ ΛΑΓΟΚΕΦΑΛΟΣ (every 5th island) ----
+
+  private spawnBoss() {
+    if (this.boss) return;
+    this.boss = {
+      x: this.laneCX(1),
+      y: -90,
+      r: 54,
+      targetLane: 1,
+      state: "enter",
+      t: 0,
+      // more passes the deeper you are: 4 lunges at island 5, up to 6
+      lungesLeft: Math.min(6, 3 + Math.floor(this.islandIdx / 5)),
+    };
+    this.addPopup(this.W / 2, this.H * 0.35, this.strings.popups.bossWarn, "#FF5A4E");
+    vibrate(90);
+    this.sfx("boss");
+  }
+
+  private defeatBoss(smashed: boolean) {
+    const b = this.boss!;
+    // "hazard pay" scales with progress but stays modest (leaderboard sanity)
+    const reward = 8 + this.islandIdx * 0.4;
+    this.haulKg += reward;
+    this.addSplash(b.x, b.y);
+    if (smashed) this.addPopup(this.W / 2, this.H * 0.34, this.strings.popups.bossSmash, "#FFC93C");
+    this.addPopup(
+      this.W / 2,
+      this.H * 0.42,
+      this.strings.popups.bossDown(reward.toFixed(1), (reward * RATE).toFixed(2)),
+      "#FFC93C"
+    );
+    vibrate(80);
+    this.sfx("frappe");
+    this.boss = null;
+  }
+
+  // Boss state machine. Returns true if a lunge ended the run.
+  private updateBoss(dt: number): boolean {
+    const b = this.boss!;
+    const topY = this.H * 0.16;
+    if (b.state === "enter") {
+      b.y += (topY - b.y) * Math.min(1, dt * 3);
+      if (b.y > topY - 8) {
+        b.state = "telegraph";
+        b.t = 0.9;
+        b.targetLane = this.lane;
+      }
+    } else if (b.state === "telegraph") {
+      // tracks your lane while flashing, locks 0.35s before the lunge so a
+      // last-moment dodge is always possible
+      if (b.t > 0.35) b.targetLane = this.lane;
+      b.x += (this.laneCX(b.targetLane) - b.x) * Math.min(1, dt * 8);
+      b.t -= dt;
+      if (b.t <= 0) b.state = "lunge";
+    } else if (b.state === "lunge") {
+      b.y += this.H * 1.35 * dt;
+      if (Math.abs(b.y - this.playerY) < b.r + 20 && Math.abs(b.x - this.laneX) < b.r + 12) {
+        if (this.freddoT > 0) {
+          // caffeinated ramming speed: instant win
+          this.defeatBoss(true);
+          return false;
+        }
+        if (this.inv <= 0 && this.bitePlayer()) return true;
+      }
+      if (b.y > this.H + b.r) b.state = "retreat";
+    } else {
+      // retreat: dives under and swims back up for the next pass
+      b.y -= this.H * 1.1 * dt;
+      if (b.y <= topY) {
+        b.y = topY;
+        b.lungesLeft--;
+        if (b.lungesLeft <= 0) {
+          this.defeatBoss(false);
+          return false;
+        }
+        b.state = "telegraph";
+        b.t = 0.8;
+      }
+    }
+    return false;
+  }
+
   // One simulation step. `t` is the current time in seconds.
   step(t: number) {
     if (!this.running) return;
@@ -289,7 +429,8 @@ export class Engine {
 
     if (this.freddoT > 0) this.freddoT -= dt;
     if (this.multT > 0) this.multT -= dt;
-    if (this.slowT > 0) this.slowT -= dt;
+    if (this.matiT > 0) this.matiT -= dt;
+    if (this.magnetT > 0) this.magnetT -= dt;
 
     // difficulty (+ freddo boost)
     // Early fast ramp (210→470 by ~4.3km) then a slow, uncapped creep so the
@@ -298,8 +439,11 @@ export class Engine {
       210 + Math.min(260, this.dist * 0.06) + Math.max(0, this.dist - 4333) * 0.02;
     this.speed = baseSpeed * (this.freddoT > 0 ? 1.35 : 1);
     // feed the music bed a 0..1.2 intensity from current speed, so the score
-    // drives harder the further/faster you go (and surges during a freddo)
-    this.onMusicProgress?.(Math.max(0, Math.min(1.2, (this.speed - 210) / 300)));
+    // drives harder the further/faster you go (and surges during a freddo);
+    // a boss fight pins it to the ceiling
+    this.onMusicProgress?.(
+      this.boss ? 1.2 : Math.max(0, Math.min(1.2, (this.speed - 210) / 300))
+    );
     this.dist += this.speed * dt * 0.06;
     if (this.dist >= this.nextIslandAt) {
       this.islandIdx++;
@@ -317,6 +461,8 @@ export class Engine {
         theme,
       };
       this.addPopup(this.W / 2, this.H * 0.42, this.strings.popups.speedUp, "#fff");
+      // every 5th island the ΜΕΓΑΣ rises from the deep
+      if (this.islandIdx % 5 === 0) this.spawnBoss();
     }
     this.bannerT -= dt;
 
@@ -346,22 +492,25 @@ export class Engine {
     this.wobble = d / 60;
     if (this.inv > 0) this.inv -= dt;
 
-    // The selfie/camera power-up slows fish AND their spawn cadence by the same
-    // factor, so time genuinely slows — otherwise fish keep spawning at full
-    // rate while crawling and pile up into an undodgeable wall across all lanes.
-    const fs = this.slowT > 0 ? 0.22 : 1;
-    this.spawn(dt * fs);
+    // during a boss fight the regular stream thins out so lunges stay dodgeable
+    this.spawn(dt * (this.boss ? 0.5 : 1));
 
-    // fish (camera makes them slow down and pose)
+    // fish
     for (const f of this.fishes) {
-      f.y += this.speed * fs * dt;
-      f.x += f.drift * fs * dt;
-      // drift must never carry a fish beyond the catchable band of its lane —
-      // the boat can't go further out than the edge lane centers, so an
-      // over-drifted bounty fish would be physically unreachable
-      const cx = this.laneCX(f.l);
-      if (f.x < cx - 18) f.x = cx - 18;
-      if (f.x > cx + 18) f.x = cx + 18;
+      f.y += this.speed * dt;
+      f.x += f.drift * dt;
+      if (this.magnetT > 0 && !f.danger) {
+        // longline active: bounty fish get reeled toward the player's lane
+        // from anywhere on screen (never danger fish)
+        f.x += (this.laneX - f.x) * Math.min(1, dt * 5);
+      } else {
+        // drift must never carry a fish beyond the catchable band of its lane —
+        // the boat can't go further out than the edge lane centers, so an
+        // over-drifted bounty fish would be physically unreachable
+        const cx = this.laneCX(f.l);
+        if (f.x < cx - 18) f.x = cx - 18;
+        if (f.x > cx + 18) f.x = cx + 18;
+      }
       // catch assist: bounty fish close to the boat's path get gently
       // magnetized so honest near-misses connect (never danger fish)
       if (
@@ -377,7 +526,7 @@ export class Engine {
     // power-ups
     for (let i = this.powers.length - 1; i >= 0; i--) {
       const p = this.powers[i];
-      p.y += this.speed * fs * dt;
+      p.y += this.speed * dt;
       if (p.y > this.H + 60) {
         this.powers.splice(i, 1);
         continue;
@@ -399,7 +548,7 @@ export class Engine {
         if (f.danger) {
           if (this.freddoT > 0) {
             // caffeinated: invincible, smash them and collect the kilos
-            const gain = f.kg * (this.multT > 0 ? 2 : 1);
+            const gain = f.kg * (this.multT > 0 ? 2 : 1) * this.comboMult();
             this.haulKg += gain;
             this.fishes.splice(i, 1);
             this.addPopup(
@@ -411,24 +560,12 @@ export class Engine {
             this.addSplash(f.x, f.y);
             vibrate(40);
             this.sfx("catch");
+            this.bumpCombo(1);
           } else if (this.inv <= 0) {
-            this.lives--;
-            this.inv = 1.4;
-            this.addSplash(this.laneX, this.playerY);
-            const q = this.strings.biteQuips;
-            this.quip = { txt: q[Math.floor(this.rng() * q.length)] };
-            this.quipT = 2.2;
-            vibrate(120);
-            this.sfx("bite");
-            if (this.lives <= 0) {
-              this.running = false;
-              this.sfx("gameover");
-              this.onGameOver();
-              return;
-            }
+            if (this.bitePlayer()) return;
           }
         } else {
-          const gain = f.kg * (this.multT > 0 ? 2 : 1);
+          const gain = f.kg * (this.multT > 0 ? 2 : 1) * this.comboMult();
           this.haulKg += gain;
           this.fishes.splice(i, 1);
           this.addPopup(
@@ -439,9 +576,13 @@ export class Engine {
           );
           this.addSplash(f.x, f.y);
           this.sfx("catch");
+          this.bumpCombo(1);
         }
       }
     }
+
+    // boss fight
+    if (this.boss && this.updateBoss(dt)) return;
 
     // fx
     for (const p of this.popups) {
