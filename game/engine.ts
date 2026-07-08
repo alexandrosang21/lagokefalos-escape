@@ -1,5 +1,5 @@
 import type { SfxName } from "./audio";
-import { islandName, islandTheme } from "./islands";
+import { IDENTITY_ORDER, islandName, islandTheme } from "./islands";
 import type {
   Fish,
   GameStrings,
@@ -33,6 +33,9 @@ export class Engine {
   onSfx?: (name: SfxName) => void;
   onMusic?: (theme: IslandTheme) => void;
   onMusicProgress?: (level: number) => void;
+  // permutation of ISLANDS indices to visit (daily challenge shuffles this;
+  // free-play uses the identity Crete-first order)
+  order: number[] = IDENTITY_ORDER;
 
   running = false;
   tPrev = 0;
@@ -78,6 +81,7 @@ export class Engine {
     onSfx?: (name: SfxName) => void;
     onMusic?: (theme: IslandTheme) => void;
     onMusicProgress?: (level: number) => void;
+    islandOrder?: number[];
   }) {
     this.W = opts.W;
     this.H = opts.H;
@@ -88,11 +92,23 @@ export class Engine {
     this.onSfx = opts.onSfx;
     this.onMusic = opts.onMusic;
     this.onMusicProgress = opts.onMusicProgress;
+    this.order = opts.islandOrder ?? IDENTITY_ORDER;
     this.reset();
   }
 
   private sfx(name: SfxName) {
     this.onSfx?.(name);
+  }
+
+  // Resolve a visit index to the actual ISLANDS index via the (possibly
+  // shuffled) order, so name + coastline art stay in lockstep.
+  private resolvedIsland(idx = this.islandIdx): number {
+    return this.order[idx % this.order.length];
+  }
+
+  // Localised name of the island currently reached (HUD + receipt).
+  currentIslandName(): string {
+    return islandName(this.strings.islands, this.resolvedIsland());
   }
 
   laneCX(i: number): number {
@@ -133,7 +149,18 @@ export class Engine {
     this.splashes = [];
     this.popups = [];
     this.powers = [];
-    this.land = null;
+    // start with the departure island's shore behind the player, so a run reads
+    // as "launching from Crete" (or the daily route's first island); it recedes
+    // off the bottom in the first seconds. Deterministic decoration (no rng) so
+    // it never perturbs the daily spawn sequence.
+    const startIsland = this.resolvedIsland(0);
+    this.land = {
+      side: startIsland % 2 === 0 ? -1 : 1,
+      y: this.H * 0.42,
+      len: this.H * 0.95,
+      seed: startIsland,
+      theme: islandTheme(startIsland),
+    };
     this.freddoT = 0;
     this.multT = 0;
     this.slowT = 0;
@@ -143,14 +170,14 @@ export class Engine {
     this.quipT = 0;
     this.idleQuipT = 5;
     this.bannerT = 1.6;
-    this.bannerTxt = this.strings.islands[0];
+    this.bannerTxt = this.currentIslandName();
   }
 
   start(nowSeconds: number) {
     this.reset();
     this.running = true;
     this.tPrev = nowSeconds;
-    this.onMusic?.(islandTheme(this.islandIdx));
+    this.onMusic?.(islandTheme(this.resolvedIsland()));
   }
 
   private spawn(dt: number) {
@@ -277,10 +304,10 @@ export class Engine {
     if (this.dist >= this.nextIslandAt) {
       this.islandIdx++;
       this.nextIslandAt += 400 + this.islandIdx * 80;
-      this.bannerTxt = islandName(this.strings.islands, this.islandIdx);
+      this.bannerTxt = this.currentIslandName();
       this.bannerT = 1.6;
       this.sfx("island");
-      const theme = islandTheme(this.islandIdx);
+      const theme = islandTheme(this.resolvedIsland());
       this.onMusic?.(theme);
       this.land = {
         side: this.rng() < 0.5 ? -1 : 1,

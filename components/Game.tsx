@@ -2,9 +2,9 @@
 
 import { GameAudio } from "@/game/audio";
 import { Engine, RATE } from "@/game/engine";
-import { islandName } from "@/game/islands";
+import { dailyIslandOrder } from "@/game/islands";
 import { drawFishPreview, render } from "@/game/render";
-import { makeRng } from "@/game/rng";
+import { dailySeedString, makeRng } from "@/game/rng";
 import { el } from "@/game/strings.el";
 import { en } from "@/game/strings.en";
 import type { GameStrings } from "@/game/types";
@@ -197,7 +197,7 @@ export default function Game() {
     async (e: Engine) => {
       audioRef.current?.stopMusic(); // fade the bed out on the receipt screen
       const strings = e.strings;
-      const island = islandName(strings.islands, e.islandIdx);
+      const island = e.currentIslandName();
       const death = strings.deaths[Math.floor(Math.random() * strings.deaths.length)];
       const kg = e.haulKg;
       setOver({ kg, euros: kg * RATE, island, death, runId: null, rank: null });
@@ -228,6 +228,9 @@ export default function Game() {
       W,
       H,
       rng: makeRng(dailyRef.current),
+      // daily challenge shuffles the island route by day-seed; free-play keeps
+      // the canonical Crete-first order
+      islandOrder: dailyRef.current ? dailyIslandOrder(dailySeedString()) : undefined,
       strings,
       onGameOver: () => handleGameOver(engine),
       hint: "ontouchstart" in window ? strings.hud.hintTouch : strings.hud.hintKeys,

@@ -1,5 +1,4 @@
 import { Engine, LANES, RATE } from "./engine";
-import { islandName } from "./islands";
 import type { Fish, IslandTheme, Power, PowerType } from "./types";
 
 type Ctx = CanvasRenderingContext2D;
@@ -538,7 +537,7 @@ function drawHUD(ctx: Ctx, e: Engine) {
   ctx.fillStyle = "#BFE0F5";
   ctx.font = "700 11px sans-serif";
   ctx.textAlign = "right";
-  const island = islandName(e.strings.islands, e.islandIdx);
+  const island = e.currentIslandName();
   ctx.fillText(island + " · " + Math.floor(e.dist) + "m", W - 22, 57);
   // active effects
   const eff: string[] = [];

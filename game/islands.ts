@@ -1,3 +1,4 @@
+import { hashString, mulberry32 } from "./rng";
 import type { IslandTheme } from "./types";
 
 // Single source of truth for the island chain: names (both languages) and the
@@ -75,4 +76,22 @@ export function islandTheme(idx: number): IslandTheme {
 // The chain loops instead of clamping on the last island.
 export function islandName(names: string[], idx: number): string {
   return names[idx % names.length];
+}
+
+// Default visiting order (Crete-first tour) used by free-play.
+export const IDENTITY_ORDER = ISLANDS.map((_, i) => i);
+
+// A deterministic per-day permutation of the island indices: everyone playing
+// the daily challenge on a given UTC day gets the same fresh route, and it's a
+// different route each day. Own seed namespace so it doesn't correlate with the
+// daily spawn pattern. Purely cosmetic (names + coastline art) — difficulty and
+// scoring key off distance, not island.
+export function dailyIslandOrder(seedStr: string): number[] {
+  const rng = mulberry32(hashString("lago-islands:" + seedStr));
+  const order = IDENTITY_ORDER.slice();
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return order;
 }
