@@ -32,6 +32,7 @@ export class Engine {
   hint: string;
   onSfx?: (name: SfxName) => void;
   onMusic?: (theme: IslandTheme) => void;
+  onMusicProgress?: (level: number) => void;
 
   running = false;
   tPrev = 0;
@@ -76,6 +77,7 @@ export class Engine {
     hint?: string;
     onSfx?: (name: SfxName) => void;
     onMusic?: (theme: IslandTheme) => void;
+    onMusicProgress?: (level: number) => void;
   }) {
     this.W = opts.W;
     this.H = opts.H;
@@ -85,6 +87,7 @@ export class Engine {
     this.hint = opts.hint ?? "";
     this.onSfx = opts.onSfx;
     this.onMusic = opts.onMusic;
+    this.onMusicProgress = opts.onMusicProgress;
     this.reset();
   }
 
@@ -267,6 +270,9 @@ export class Engine {
     const baseSpeed =
       210 + Math.min(260, this.dist * 0.06) + Math.max(0, this.dist - 4333) * 0.02;
     this.speed = baseSpeed * (this.freddoT > 0 ? 1.35 : 1);
+    // feed the music bed a 0..1.2 intensity from current speed, so the score
+    // drives harder the further/faster you go (and surges during a freddo)
+    this.onMusicProgress?.(Math.max(0, Math.min(1.2, (this.speed - 210) / 300)));
     this.dist += this.speed * dt * 0.06;
     if (this.dist >= this.nextIslandAt) {
       this.islandIdx++;

@@ -233,6 +233,7 @@ export default function Game() {
       hint: "ontouchstart" in window ? strings.hud.hintTouch : strings.hud.hintKeys,
       onSfx: audio ? (name) => audio.play(name) : undefined,
       onMusic: audio ? (theme) => audio.setMusicTheme(theme) : undefined,
+      onMusicProgress: audio ? (level) => audio.setMusicProgress(level) : undefined,
     });
     engineRef.current = engine;
     setScreen("playing");

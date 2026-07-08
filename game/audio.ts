@@ -60,6 +60,7 @@ export class GameAudio {
   private mStep = 0;
   private mMood: MoodCfg = MOODS.port;
   private mExt: number[] = []; // two-octave note table for the current scale
+  private mIntensity = 0; // 0..1.2 driven by game speed — ramps the score up
 
   constructor() {
     try {
@@ -209,27 +210,65 @@ export class GameAudio {
     o.stop(at + dur + 0.02);
   }
 
-  private mScheduleStep(step: number, at: number) {
+  // A short filtered-noise hit on the music bus — used as a driving shaker.
+  private mNoise(dur: number, peak: number, filterHz: number, at: number) {
+    const ctx = this.ctx!;
+    const n = Math.max(1, Math.floor(ctx.sampleRate * dur));
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const f = ctx.createBiquadFilter();
+    f.type = "highpass";
+    f.frequency.value = filterHz;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(peak, at);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    src.connect(f);
+    f.connect(g);
+    g.connect(this.musicGain!);
+    src.start(at);
+    src.stop(at + dur);
+  }
+
+  private mScheduleStep(step: number, at: number, dur: number) {
     const m = this.mMood;
     const bar = step % 8;
+    const it = Math.min(1, this.mIntensity); // clamped intensity for layer mixing
     // bass: root on the downbeat, a fifth up halfway through the bar
-    if (bar === 0) this.mVoice(m.root / 2, m.tempo * 3.6, m.bass, m.bassGain, at);
-    else if (bar === 4) this.mVoice((m.root / 2) * 1.4983, m.tempo * 3.6, m.bass, m.bassGain, at);
+    if (bar === 0) this.mVoice(m.root / 2, dur * 3.6, m.bass, m.bassGain, at);
+    else if (bar === 4) this.mVoice((m.root / 2) * 1.4983, dur * 3.6, m.bass, m.bassGain, at);
     // lead: follow the rolling contour through the scale table
     const li = LEAD_PATTERN[step % LEAD_PATTERN.length];
-    if (li >= 0 && this.mExt[li]) this.mVoice(this.mExt[li], m.tempo * 0.9, m.lead, m.leadGain, at);
+    if (li >= 0 && this.mExt[li]) this.mVoice(this.mExt[li], dur * 0.9, m.lead, m.leadGain, at);
+    // ---- intensity-driven layers: the faster you go, the busier it gets ----
+    // driving shaker on the off-beats once things heat up
+    if (it > 0.3 && step % 2 === 1) this.mNoise(dur * 0.22, 0.04 + 0.06 * it, 7000, at);
+    // four-on-the-floor kick pulse for drive at mid intensity
+    if (it > 0.5 && bar % 2 === 0) this.mVoice(m.root / 2, dur * 0.28, "sine", m.bassGain * 0.7, at);
+    // octave-up shimmer on the lead near top speed
+    if (it > 0.65 && li >= 0 && this.mExt[li] && step % 4 === 0)
+      this.mVoice(this.mExt[li] * 2, dur * 0.5, "triangle", m.leadGain * 0.5, at + dur * 0.5);
   }
 
   // Lookahead scheduler: queue every note due within the next window, then sleep.
+  // Note length shrinks with intensity, so the whole bed tightens up at speed.
   private mTick = () => {
     const ctx = this.ctx;
     if (!ctx || !this.musicGain) return;
     while (this.mNextTime < ctx.currentTime + MUSIC_LOOKAHEAD) {
-      this.mScheduleStep(this.mStep, this.mNextTime);
-      this.mNextTime += this.mMood.tempo;
+      const dur = this.mMood.tempo * (1 - 0.38 * Math.min(1, this.mIntensity));
+      this.mScheduleStep(this.mStep, this.mNextTime, dur);
+      this.mNextTime += dur;
       this.mStep++;
     }
   };
+
+  // Called ~every frame with the game's current speed intensity (0..1.2).
+  setMusicProgress(level: number) {
+    this.mIntensity = level;
+  }
 
   // Start (or restart) the music bed. resume() must have run first.
   startMusic(theme: IslandTheme = "port") {
@@ -244,6 +283,7 @@ export class GameAudio {
     this.mMood = MOODS[theme];
     this.buildScale(this.mMood);
     this.mStep = 0;
+    this.mIntensity = 0;
     this.mNextTime = ctx.currentTime + 0.1;
     if (this.musicTimer === null) this.musicTimer = window.setInterval(this.mTick, MUSIC_TICK);
   }
