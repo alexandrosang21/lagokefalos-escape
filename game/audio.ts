@@ -17,10 +17,12 @@ const MUSIC_LEVEL = 0.85; // music sits UNDER the SFX, not over them
 const MUSIC_LOOKAHEAD = 0.12; // schedule notes this far ahead (s)
 const MUSIC_TICK = 25; // scheduler wake-ups (ms)
 
+// Note: tempo is NOT part of a mood — it's driven globally by game speed (see
+// stepDur) so the bed only ever tightens as you go faster. Islands differ by
+// key, scale and instrument only, so a mood change never slows the music down.
 interface MoodCfg {
   root: number; // root frequency of the low register (Hz)
   scale: number[]; // semitone offsets within the octave
-  tempo: number; // seconds per eighth-note
   lead: OscillatorType;
   bass: OscillatorType;
   leadGain: number;
@@ -29,19 +31,19 @@ interface MoodCfg {
 
 const MOODS: Record<IslandTheme, MoodCfg> = {
   // relaxed taverna groove (D minor-pentatonic-ish)
-  port: { root: 146.83, scale: [0, 3, 5, 7, 10], tempo: 0.34, lead: "triangle", bass: "sine", leadGain: 0.075, bassGain: 0.11 },
+  port: { root: 146.83, scale: [0, 3, 5, 7, 10], lead: "triangle", bass: "sine", leadGain: 0.075, bassGain: 0.11 },
   // bright + airy (E major pentatonic)
-  cycladic: { root: 164.81, scale: [0, 2, 4, 7, 9], tempo: 0.28, lead: "triangle", bass: "sine", leadGain: 0.08, bassGain: 0.1 },
+  cycladic: { root: 164.81, scale: [0, 2, 4, 7, 9], lead: "triangle", bass: "sine", leadGain: 0.08, bassGain: 0.1 },
   // tense, dark (A phrygian)
-  volcanic: { root: 110.0, scale: [0, 1, 3, 5, 7, 8, 10], tempo: 0.3, lead: "sawtooth", bass: "triangle", leadGain: 0.05, bassGain: 0.12 },
+  volcanic: { root: 110.0, scale: [0, 1, 3, 5, 7, 8, 10], lead: "sawtooth", bass: "triangle", leadGain: 0.05, bassGain: 0.12 },
   // mellow, pastoral (C major pentatonic)
-  green: { root: 130.81, scale: [0, 2, 4, 7, 9], tempo: 0.36, lead: "sine", bass: "sine", leadGain: 0.07, bassGain: 0.1 },
+  green: { root: 130.81, scale: [0, 2, 4, 7, 9], lead: "sine", bass: "sine", leadGain: 0.07, bassGain: 0.1 },
   // bouncy (G major pentatonic)
-  windmill: { root: 196.0, scale: [0, 2, 4, 7, 9], tempo: 0.25, lead: "triangle", bass: "sine", leadGain: 0.075, bassGain: 0.1 },
+  windmill: { root: 196.0, scale: [0, 2, 4, 7, 9], lead: "triangle", bass: "sine", leadGain: 0.075, bassGain: 0.1 },
   // chill beach (F minor pentatonic)
-  beach: { root: 174.61, scale: [0, 3, 5, 7, 10], tempo: 0.32, lead: "triangle", bass: "sine", leadGain: 0.07, bassGain: 0.1 },
+  beach: { root: 174.61, scale: [0, 3, 5, 7, 10], lead: "triangle", bass: "sine", leadGain: 0.07, bassGain: 0.1 },
   // sparse + wistful (A natural minor)
-  lighthouse: { root: 110.0, scale: [0, 2, 3, 5, 7, 8, 10], tempo: 0.42, lead: "sine", bass: "sine", leadGain: 0.06, bassGain: 0.1 },
+  lighthouse: { root: 110.0, scale: [0, 2, 3, 5, 7, 8, 10], lead: "sine", bass: "sine", leadGain: 0.06, bassGain: 0.1 },
 };
 
 // 16-step melodic contour — indexes into the two-octave scale table (-1 = rest).
@@ -210,6 +212,24 @@ export class GameAudio {
     o.stop(at + dur + 0.02);
   }
 
+  // A soft, rounded kick pulse: gentle attack + a short downward pitch settle so
+  // it thumps rather than clicks.
+  private mKick(freq: number, dur: number, peak: number, at: number) {
+    const ctx = this.ctx!;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(freq * 1.3, at);
+    o.frequency.exponentialRampToValueAtTime(freq, at + dur * 0.6);
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.linearRampToValueAtTime(peak, at + 0.05); // slow, soft onset
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(g);
+    g.connect(this.musicGain!);
+    o.start(at);
+    o.stop(at + dur + 0.02);
+  }
+
   // A short filtered-noise hit on the music bus — used as a driving shaker.
   private mNoise(dur: number, peak: number, filterHz: number, at: number) {
     const ctx = this.ctx!;
@@ -245,20 +265,26 @@ export class GameAudio {
     // ---- intensity-driven layers: the faster you go, the busier it gets ----
     // driving shaker on the off-beats once things heat up
     if (it > 0.3 && step % 2 === 1) this.mNoise(dur * 0.22, 0.04 + 0.06 * it, 7000, at);
-    // four-on-the-floor kick pulse for drive at mid intensity
-    if (it > 0.5 && bar % 2 === 0) this.mVoice(m.root / 2, dur * 0.28, "sine", m.bassGain * 0.7, at);
+    // four-on-the-floor kick pulse for drive at mid intensity (soft & rounded)
+    if (it > 0.5 && bar % 2 === 0) this.mKick(m.root / 2, dur * 0.75, m.bassGain * 0.5, at);
     // octave-up shimmer on the lead near top speed
     if (it > 0.65 && li >= 0 && this.mExt[li] && step % 4 === 0)
       this.mVoice(this.mExt[li] * 2, dur * 0.5, "triangle", m.leadGain * 0.5, at + dur * 0.5);
   }
 
+  // Eighth-note length, driven ONLY by game speed — so the bed monotonically
+  // tightens as you go faster and never slows on an island change. Ranges from a
+  // laid-back 0.34s at the start to a driving 0.18s at top speed.
+  private stepDur(): number {
+    return 0.34 - 0.16 * Math.min(1, this.mIntensity);
+  }
+
   // Lookahead scheduler: queue every note due within the next window, then sleep.
-  // Note length shrinks with intensity, so the whole bed tightens up at speed.
   private mTick = () => {
     const ctx = this.ctx;
     if (!ctx || !this.musicGain) return;
     while (this.mNextTime < ctx.currentTime + MUSIC_LOOKAHEAD) {
-      const dur = this.mMood.tempo * (1 - 0.38 * Math.min(1, this.mIntensity));
+      const dur = this.stepDur();
       this.mScheduleStep(this.mStep, this.mNextTime, dur);
       this.mNextTime += dur;
       this.mStep++;
