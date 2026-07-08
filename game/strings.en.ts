@@ -33,7 +33,7 @@ export const en: GameStrings = {
     "The sea was quiet... too quiet",
     "The fishermen were right after all",
     "New job title: lagokefalos hunter",
-    "The Ministry is proud of me 🇬🇷",
+    "The Ministry is proud of me 🏛",
     "Think it'll bite me? ...Think so?",
     "I'll declare the sea as pasture to OPEKEPE 🐐",
     "Declared the lagokefaloi as livestock",

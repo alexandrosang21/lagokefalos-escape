@@ -1,5 +1,6 @@
 "use client";
 
+import { GameAudio } from "@/game/audio";
 import { Engine, RATE } from "@/game/engine";
 import { islandName } from "@/game/islands";
 import { drawFishPreview, render } from "@/game/render";
@@ -62,6 +63,7 @@ export default function Game() {
   const dailyRef = useRef(false);
   const boardPeriodRef = useRef<"all" | "daily">("all");
   const runTokenRef = useRef<string | null>(null);
+  const audioRef = useRef<GameAudio | null>(null);
 
   const [screen, setScreen] = useState<Screen>("start");
   const [lang, setLang] = useState<Lang>("el");
@@ -71,11 +73,13 @@ export default function Game() {
   const [over, setOver] = useState<OverData | null>(null);
   const [board, setBoard] = useState<BoardState>({ status: "loading" });
   const [boardPeriod, setBoardPeriod] = useState<"all" | "daily">("all");
+  const [muted, setMuted] = useState(false);
 
   const S = STRINGS[lang];
 
   // persisted prefs — read after mount so server and client render the same HTML
   useEffect(() => {
+    audioRef.current = new GameAudio();
     try {
       const l = localStorage.getItem("lago-lang");
       const storedName = localStorage.getItem("lago-name") ?? "";
@@ -84,8 +88,16 @@ export default function Game() {
       if (l === "en" || l === "el") setLang(l);
       setBest(parseFloat(localStorage.getItem("lago-best") ?? "0") || 0);
       setName(storedName);
+      setMuted(audioRef.current.muted);
     } catch {}
   }, []);
+
+  const toggleMute = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    a.resume(); // a tap on the button also unlocks audio
+    setMuted(a.toggleMuted());
+  };
 
   const toggleLang = () => {
     const next: Lang = lang === "el" ? "en" : "el";
@@ -183,6 +195,7 @@ export default function Game() {
 
   const handleGameOver = useCallback(
     async (e: Engine) => {
+      audioRef.current?.stopMusic(); // fade the bed out on the receipt screen
       const strings = e.strings;
       const island = islandName(strings.islands, e.islandIdx);
       const death = strings.deaths[Math.floor(Math.random() * strings.deaths.length)];
@@ -208,6 +221,9 @@ export default function Game() {
     if (!cv || engineRef.current?.running) return;
     const { W, H } = sizeCanvas();
     const strings = STRINGS[(localStorage.getItem("lago-lang") as Lang) || "el"] ?? S;
+    const audio = audioRef.current;
+    audio?.resume(); // this START tap unlocks WebAudio on mobile
+    audio?.startMusic(); // kick off the generative music bed
     const engine = new Engine({
       W,
       H,
@@ -215,6 +231,8 @@ export default function Game() {
       strings,
       onGameOver: () => handleGameOver(engine),
       hint: "ontouchstart" in window ? strings.hud.hintTouch : strings.hud.hintKeys,
+      onSfx: audio ? (name) => audio.play(name) : undefined,
+      onMusic: audio ? (theme) => audio.setMusicTheme(theme) : undefined,
     });
     engineRef.current = engine;
     setScreen("playing");
@@ -339,6 +357,31 @@ export default function Game() {
           {S.ui.langToggle}
         </button>
       )}
+
+      {/* mute toggle stays visible during play so you can silence it mid-run;
+          minimal vector icon, sits below the HUD counts on the right */}
+      <button className="mute-btn" onClick={toggleMute} aria-label={muted ? "unmute" : "mute"}>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" />
+          {muted ? (
+            <path
+              d="M16 9.5l4 5M20 9.5l-4 5"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              fill="none"
+            />
+          ) : (
+            <path
+              d="M16 8.5a4.5 4.5 0 0 1 0 7"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              fill="none"
+            />
+          )}
+        </svg>
+      </button>
 
       {screen === "start" && (
         <div className="overlay">

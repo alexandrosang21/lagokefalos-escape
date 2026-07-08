@@ -1,7 +1,9 @@
+import type { SfxName } from "./audio";
 import { islandName, islandTheme } from "./islands";
 import type {
   Fish,
   GameStrings,
+  IslandTheme,
   Land,
   Popup,
   Power,
@@ -28,6 +30,8 @@ export class Engine {
   strings: GameStrings;
   onGameOver: () => void;
   hint: string;
+  onSfx?: (name: SfxName) => void;
+  onMusic?: (theme: IslandTheme) => void;
 
   running = false;
   tPrev = 0;
@@ -70,6 +74,8 @@ export class Engine {
     strings: GameStrings;
     onGameOver: () => void;
     hint?: string;
+    onSfx?: (name: SfxName) => void;
+    onMusic?: (theme: IslandTheme) => void;
   }) {
     this.W = opts.W;
     this.H = opts.H;
@@ -77,7 +83,13 @@ export class Engine {
     this.strings = opts.strings;
     this.onGameOver = opts.onGameOver;
     this.hint = opts.hint ?? "";
+    this.onSfx = opts.onSfx;
+    this.onMusic = opts.onMusic;
     this.reset();
+  }
+
+  private sfx(name: SfxName) {
+    this.onSfx?.(name);
   }
 
   laneCX(i: number): number {
@@ -135,6 +147,7 @@ export class Engine {
     this.reset();
     this.running = true;
     this.tPrev = nowSeconds;
+    this.onMusic?.(islandTheme(this.islandIdx));
   }
 
   private spawn(dt: number) {
@@ -152,9 +165,13 @@ export class Engine {
     this.spawnT -= dt;
     if (this.spawnT > 0) return;
     const diff = Math.min(1, this.dist / 3000);
-    this.spawnT = Math.max(0.32, 0.9 - diff * 0.5) + this.rng() * 0.3;
+    // difficulty keeps ramping past the early plateau so long runs eventually
+    // end: spawn interval keeps tightening and the danger-fish share rises.
+    const extra = Math.min(0.12, Math.max(0, this.dist - 3000) * 0.00002);
+    this.spawnT = Math.max(0.26, 0.9 - diff * 0.5 - extra) + this.rng() * 0.3;
     const l = Math.floor(this.rng() * LANES);
-    const danger = this.rng() < 0.62;
+    const dangerChance = Math.min(0.8, 0.62 + Math.max(0, this.dist - 2000) * 0.00002);
+    const danger = this.rng() < dangerChance;
     const kg = danger ? 8 + this.rng() * 7 : 1 + this.rng() * 4;
     this.fishes.push({
       l,
@@ -226,9 +243,11 @@ export class Engine {
         "#FFC93C"
       );
       vibrate(80);
+      this.sfx("frappe");
       return;
     }
     vibrate(30);
+    this.sfx("power");
   }
 
   // One simulation step. `t` is the current time in seconds.
@@ -243,19 +262,26 @@ export class Engine {
     if (this.slowT > 0) this.slowT -= dt;
 
     // difficulty (+ freddo boost)
-    this.speed = (210 + Math.min(260, this.dist * 0.06)) * (this.freddoT > 0 ? 1.35 : 1);
+    // Early fast ramp (210→470 by ~4.3km) then a slow, uncapped creep so the
+    // game never fully plateaus — a marathon run keeps getting harder.
+    const baseSpeed =
+      210 + Math.min(260, this.dist * 0.06) + Math.max(0, this.dist - 4333) * 0.02;
+    this.speed = baseSpeed * (this.freddoT > 0 ? 1.35 : 1);
     this.dist += this.speed * dt * 0.06;
     if (this.dist >= this.nextIslandAt) {
       this.islandIdx++;
       this.nextIslandAt += 400 + this.islandIdx * 80;
       this.bannerTxt = islandName(this.strings.islands, this.islandIdx);
       this.bannerT = 1.6;
+      this.sfx("island");
+      const theme = islandTheme(this.islandIdx);
+      this.onMusic?.(theme);
       this.land = {
         side: this.rng() < 0.5 ? -1 : 1,
         y: -this.H * 1.1,
         len: this.H * 1.05,
         seed: Math.floor(this.rng() * 99),
-        theme: islandTheme(this.islandIdx),
+        theme,
       };
       this.addPopup(this.W / 2, this.H * 0.42, this.strings.popups.speedUp, "#fff");
     }
@@ -287,10 +313,13 @@ export class Engine {
     this.wobble = d / 60;
     if (this.inv > 0) this.inv -= dt;
 
-    this.spawn(dt);
-
-    // fish (TikTok camera makes them stop and pose)
+    // The selfie/camera power-up slows fish AND their spawn cadence by the same
+    // factor, so time genuinely slows — otherwise fish keep spawning at full
+    // rate while crawling and pile up into an undodgeable wall across all lanes.
     const fs = this.slowT > 0 ? 0.22 : 1;
+    this.spawn(dt * fs);
+
+    // fish (camera makes them slow down and pose)
     for (const f of this.fishes) {
       f.y += this.speed * fs * dt;
       f.x += f.drift * fs * dt;
@@ -348,6 +377,7 @@ export class Engine {
             );
             this.addSplash(f.x, f.y);
             vibrate(40);
+            this.sfx("catch");
           } else if (this.inv <= 0) {
             this.lives--;
             this.inv = 1.4;
@@ -356,8 +386,10 @@ export class Engine {
             this.quip = { txt: q[Math.floor(this.rng() * q.length)] };
             this.quipT = 2.2;
             vibrate(120);
+            this.sfx("bite");
             if (this.lives <= 0) {
               this.running = false;
+              this.sfx("gameover");
               this.onGameOver();
               return;
             }
@@ -373,6 +405,7 @@ export class Engine {
             this.multT > 0 ? "#9BFFB0" : "#FFC93C"
           );
           this.addSplash(f.x, f.y);
+          this.sfx("catch");
         }
       }
     }
