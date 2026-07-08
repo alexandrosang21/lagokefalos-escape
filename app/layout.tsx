@@ -66,8 +66,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="el">
-      <body>{children}</body>
+    // suppressHydrationWarning: browser extensions / remote-frame tools inject
+    // attributes onto <html> (e.g. __gcrremoteframetoken) before React hydrates,
+    // which would otherwise trip a hydration mismatch. This only ignores the
+    // root element's own attribute diffs, not app content.
+    <html lang="el" suppressHydrationWarning>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }
