@@ -7,6 +7,7 @@ export type SfxName = "catch" | "bite" | "power" | "frappe" | "island" | "gameov
 
 const STORAGE_KEY = "lago-muted";
 const MASTER_GAIN = 0.35;
+const SFX_LEVEL = 0.28; // sound effects sit on their own quieter bus under master
 
 // ---- generative music ----
 // A soft looping bed (bass + arpeggio) synthesised on the fly. Each island art
@@ -49,6 +50,7 @@ const LEAD_PATTERN = [0, 2, 4, 2, 5, 4, 2, -1, 1, 3, 5, 3, 6, 4, 2, -1];
 export class GameAudio {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  private sfxGain: GainNode | null = null;
   muted = false;
 
   // generative-music state
@@ -78,6 +80,9 @@ export class GameAudio {
       this.master = this.ctx.createGain();
       this.master.gain.value = this.muted ? 0 : MASTER_GAIN;
       this.master.connect(this.ctx.destination);
+      this.sfxGain = this.ctx.createGain();
+      this.sfxGain.gain.value = SFX_LEVEL;
+      this.sfxGain.connect(this.master);
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
   }
@@ -114,7 +119,7 @@ export class GameAudio {
     g.gain.exponentialRampToValueAtTime(peak, t + 0.008);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g);
-    g.connect(this.master!);
+    g.connect(this.sfxGain!);
     o.start(t);
     o.stop(t + dur + 0.02);
   }
@@ -137,7 +142,7 @@ export class GameAudio {
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(f);
     f.connect(g);
-    g.connect(this.master!);
+    g.connect(this.sfxGain!);
     src.start(t);
     src.stop(t + dur);
   }
