@@ -7,7 +7,7 @@ export type SfxName = "catch" | "bite" | "power" | "frappe" | "island" | "gameov
 
 const STORAGE_KEY = "lago-muted";
 const MASTER_GAIN = 0.35;
-const SFX_LEVEL = 0.28; // sound effects sit on their own quieter bus under master
+const SFX_LEVEL = 0.16; // sound effects sit on their own quieter bus under master
 
 // ---- generative music ----
 // A soft looping bed (bass + arpeggio) synthesised on the fly. Each island art
@@ -153,9 +153,9 @@ export class GameAudio {
   play(name: SfxName) {
     if (!this.ctx || this.muted) return;
     switch (name) {
-      case "catch": // bright coin ding
-        this.blip(880, 0.09, "square", 0.25);
-        this.blip(1320, 0.11, "square", 0.2, 0.05);
+      case "catch": // soft coin ding — fires on every fish, so keep it gentle
+        this.blip(880, 0.08, "triangle", 0.14);
+        this.blip(1320, 0.09, "triangle", 0.11, 0.045);
         break;
       case "bite": // low gomp + noise thud
         this.blip(170, 0.2, "sawtooth", 0.3, 0, 70);
