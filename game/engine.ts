@@ -6,6 +6,8 @@ import type {
   GameStrings,
   IslandTheme,
   Land,
+  Obstacle,
+  ObstacleKind,
   Popup,
   Power,
   PowerType,
@@ -34,9 +36,12 @@ export class Engine {
   onSfx?: (name: SfxName) => void;
   onMusic?: (theme: IslandTheme) => void;
   onMusicProgress?: (level: number) => void;
-  // permutation of ISLANDS indices to visit (daily challenge shuffles this;
-  // free-play uses the identity Crete-first order)
+  // visiting order of ISLANDS indices (defaults to the Crete-first tour)
   order: number[] = IDENTITY_ORDER;
+  // "Ερυθρά Θάλασσα" hard mode: brutal mechanics + red waters; euros ×1.5 so a
+  // shorter, deadlier run stays competitive on the same boards.
+  hard = false;
+  euroMult = 1;
 
   running = false;
   tPrev = 0;
@@ -58,6 +63,7 @@ export class Engine {
   splashes: Splash[] = [];
   popups: Popup[] = [];
   powers: Power[] = [];
+  obstacles: Obstacle[] = []; // hard-mode dodge-or-die hazards
   land: Land | null = null;
   // combo streak: catches build it, a bite resets it
   combo = 0;
@@ -69,8 +75,10 @@ export class Engine {
   multT = 0;
   matiT = 0; // evil-eye charm: blocks the next bite while > 0
   magnetT = 0; // longline: bounty fish get reeled toward the player
+  stunT = 0; // jellyfish sting: steering frozen while > 0
   powerT = 6;
   spawnT = 0;
+  obstacleT = 0; // hard-mode hazard spawn timer
 
   quip: Quip | null = null;
   quipT = 0;
@@ -87,6 +95,7 @@ export class Engine {
     onMusic?: (theme: IslandTheme) => void;
     onMusicProgress?: (level: number) => void;
     islandOrder?: number[];
+    hard?: boolean;
   }) {
     this.W = opts.W;
     this.H = opts.H;
@@ -98,11 +107,19 @@ export class Engine {
     this.onMusic = opts.onMusic;
     this.onMusicProgress = opts.onMusicProgress;
     this.order = opts.islandOrder ?? IDENTITY_ORDER;
+    this.hard = opts.hard ?? false;
+    this.euroMult = this.hard ? 1.5 : 1;
     this.reset();
   }
 
   private sfx(name: SfxName) {
     this.onSfx?.(name);
+  }
+
+  // Euro string for a kg amount, including the hard-mode ×1.5 bonus — the single
+  // place display euros are formatted, so HUD and popups stay consistent.
+  eur(kg: number): string {
+    return (kg * RATE * this.euroMult).toFixed(2);
   }
 
   // Resolve a visit index to the actual ISLANDS index via the (possibly
@@ -129,6 +146,7 @@ export class Engine {
   }
 
   setLane(n: number) {
+    if (this.stunT > 0) return; // a jellyfish sting freezes your steering
     this.lane = Math.max(0, Math.min(LANES - 1, n));
   }
 
@@ -154,6 +172,9 @@ export class Engine {
     this.splashes = [];
     this.popups = [];
     this.powers = [];
+    this.obstacles = [];
+    this.stunT = 0;
+    this.obstacleT = this.hard ? 2.5 : 0;
     this.combo = 0;
     this.boss = null;
     // start with the departure island's shore behind the player, so a run reads
@@ -188,10 +209,27 @@ export class Engine {
     this.onMusic?.(islandTheme(this.resolvedIsland()));
   }
 
+  private spawnObstacle() {
+    const l = Math.floor(this.rng() * LANES);
+    const roll = this.rng();
+    // ~40% jelly (stun), ~60% split between rock and mine (life)
+    const kind: ObstacleKind = roll < 0.4 ? "jelly" : roll < 0.7 ? "rock" : "mine";
+    const r = kind === "jelly" ? 20 : 22;
+    this.obstacles.push({ kind, l, x: this.laneCX(l), y: -50, r, phase: this.rng() * 6 });
+  }
+
   private spawn(dt: number) {
+    // hard-mode dodge-or-die hazards, on their own cadence (tightens with distance)
+    if (this.hard) {
+      this.obstacleT -= dt;
+      if (this.obstacleT <= 0) {
+        this.obstacleT = Math.max(1.3, 2.8 - this.dist * 0.00008) + this.rng() * 0.8;
+        this.spawnObstacle();
+      }
+    }
     this.powerT -= dt;
     if (this.powerT <= 0) {
-      this.powerT = 7 + this.rng() * 4;
+      this.powerT = (this.hard ? 11 : 7) + this.rng() * (this.hard ? 6 : 4);
       // frappé is the rare jackpot (~10% of drops); the classic four split the rest
       const ty: PowerType =
         this.rng() < 0.1
@@ -208,7 +246,9 @@ export class Engine {
     const extra = Math.min(0.12, Math.max(0, this.dist - 3000) * 0.00002);
     this.spawnT = Math.max(0.26, 0.9 - diff * 0.5 - extra) + this.rng() * 0.3;
     const l = Math.floor(this.rng() * LANES);
-    const dangerChance = Math.min(0.8, 0.62 + Math.max(0, this.dist - 2000) * 0.00002);
+    const dangerChance = this.hard
+      ? Math.min(0.9, 0.75 + Math.max(0, this.dist - 1000) * 0.00002)
+      : Math.min(0.8, 0.62 + Math.max(0, this.dist - 2000) * 0.00002);
     const danger = this.rng() < dangerChance;
     const kg = danger ? 8 + this.rng() * 7 : 1 + this.rng() * 4;
     this.fishes.push({
@@ -280,7 +320,7 @@ export class Engine {
         this.laneX,
         this.playerY - 60,
         total > 0
-          ? S.frappe(total.toFixed(1), (total * RATE).toFixed(2))
+          ? S.frappe(total.toFixed(1), this.eur(total))
           : S.frappeEmpty,
         "#FFC93C"
       );
@@ -366,7 +406,7 @@ export class Engine {
     this.addPopup(
       this.W / 2,
       this.H * 0.42,
-      this.strings.popups.bossDown(reward.toFixed(1), (reward * RATE).toFixed(2)),
+      this.strings.popups.bossDown(reward.toFixed(1), this.eur(reward)),
       "#FFC93C"
     );
     vibrate(80);
@@ -431,13 +471,16 @@ export class Engine {
     if (this.multT > 0) this.multT -= dt;
     if (this.matiT > 0) this.matiT -= dt;
     if (this.magnetT > 0) this.magnetT -= dt;
+    if (this.stunT > 0) this.stunT -= dt;
 
     // difficulty (+ freddo boost)
     // Early fast ramp (210→470 by ~4.3km) then a slow, uncapped creep so the
     // game never fully plateaus — a marathon run keeps getting harder.
     const baseSpeed =
       210 + Math.min(260, this.dist * 0.06) + Math.max(0, this.dist - 4333) * 0.02;
-    this.speed = baseSpeed * (this.freddoT > 0 ? 1.35 : 1);
+    // hard mode: faster from the first second and a steeper creep
+    const hardMul = this.hard ? 1.28 : 1;
+    this.speed = baseSpeed * hardMul * (this.freddoT > 0 ? 1.35 : 1);
     // feed the music bed a 0..1.2 intensity from current speed, so the score
     // drives harder the further/faster you go (and surges during a freddo);
     // a boss fight pins it to the ceiling
@@ -541,6 +584,41 @@ export class Engine {
       }
     }
 
+    // hard-mode obstacles: dodge-or-die. Freddo passes through everything.
+    for (let i = this.obstacles.length - 1; i >= 0; i--) {
+      const o = this.obstacles[i];
+      o.y += this.speed * dt;
+      if (o.y > this.H + 60) {
+        this.obstacles.splice(i, 1);
+        continue;
+      }
+      if (Math.abs(o.y - this.playerY) < o.r + 20 && Math.abs(o.x - this.laneX) < o.r + 15) {
+        if (this.freddoT > 0) continue; // caffeinated: barrel through unharmed
+        this.obstacles.splice(i, 1);
+        if (o.kind === "jelly") {
+          // sting: freeze steering briefly (no life lost)
+          this.stunT = Math.max(this.stunT, 1.1);
+          this.addSplash(o.x, o.y);
+          this.addPopup(this.laneX, this.playerY - 60, "😵", "#C9A0FF");
+          vibrate(60);
+        } else if (this.inv <= 0) {
+          // rock / mine: costs a life
+          this.combo = 0;
+          this.lives--;
+          this.inv = 1.4;
+          this.addSplash(this.laneX, this.playerY);
+          this.sfx("bite");
+          vibrate(120);
+          if (this.lives <= 0) {
+            this.running = false;
+            this.sfx("gameover");
+            this.onGameOver();
+            return;
+          }
+        }
+      }
+    }
+
     // collide
     for (let i = this.fishes.length - 1; i >= 0; i--) {
       const f = this.fishes[i];
@@ -554,7 +632,7 @@ export class Engine {
             this.addPopup(
               f.x,
               f.y - 30,
-              this.strings.popups.smashed(gain.toFixed(1), (gain * RATE).toFixed(2)),
+              this.strings.popups.smashed(gain.toFixed(1), this.eur(gain)),
               "#FFC93C"
             );
             this.addSplash(f.x, f.y);
@@ -571,7 +649,7 @@ export class Engine {
           this.addPopup(
             f.x,
             f.y - 30,
-            this.strings.popups.caught(gain.toFixed(1), (gain * RATE).toFixed(2)),
+            this.strings.popups.caught(gain.toFixed(1), this.eur(gain)),
             this.multT > 0 ? "#9BFFB0" : "#FFC93C"
           );
           this.addSplash(f.x, f.y);

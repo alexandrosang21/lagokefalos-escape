@@ -253,6 +253,80 @@ input.name-in {
   accent-color: var(--sun);
 }
 
+/* receipt: prominent "enter your name to get ranked" prompt */
+.name-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 201, 60, 0.1);
+  border: 1px dashed rgba(255, 201, 60, 0.5);
+  width: min(330px, 88vw);
+}
+
+.name-cta-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--sun);
+  line-height: 1.35;
+}
+
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.name-row .name-in {
+  margin-top: 0;
+  width: 200px;
+}
+
+.name-go {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border: none;
+  border-radius: 12px;
+  background: var(--sun);
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.name-go:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.name-skip {
+  font-size: 11px;
+  color: #9fc4dd;
+}
+
+/* receipt: switch modes for the next run */
+.try-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.try-mode-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #bfe0f5;
+}
+
+.try-mode .daily-row {
+  margin-top: 8px;
+}
+
 .board {
   margin-top: 16px;
   width: min(300px, 86vw);
@@ -270,6 +344,32 @@ input.name-in {
   margin-bottom: 8px;
 }
 
+/* compact segmented switch so it's clear which view (Today / All-time) is active */
+.board-tabs {
+  display: inline-flex;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 8px;
+  padding: 2px;
+  margin-bottom: 10px;
+}
+
+.board-tab {
+  border: none;
+  background: none;
+  color: #9fc4dd;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.board-tab.active {
+  background: var(--sun);
+  color: var(--ink);
+}
+
 .board .row {
   display: flex;
   justify-content: space-between;
@@ -284,6 +384,13 @@ input.name-in {
 
 .board .me {
   color: var(--sun);
+}
+
+/* the "you" row when you're outside the visible top 10 — set apart from it */
+.board .you-row {
+  border-top: 1px dashed rgba(255, 255, 255, 0.22);
+  margin-top: 5px;
+  padding-top: 7px;
 }
 
 .tiny {

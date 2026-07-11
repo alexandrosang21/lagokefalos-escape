@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
   const islandIdx = Number(body.islandIdx);
   const clientDurationS = Number(body.durationS);
   const daily = Boolean(body.daily);
+  const hard = Boolean(body.hard);
   const displayName = sanitizeName(body.name);
 
   if (
@@ -93,11 +94,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 
-  const euros = Math.round(haulKg * RATE * 100) / 100; // never trusted from the client
+  // Euros are always recomputed server-side (never trusted); the ×1.5 Red Sea
+  // bonus is applied here. The `hard` flag is client-asserted like `daily`, so a
+  // determined cheat could claim it — the haul itself stays capped, keeping the
+  // inflation bounded and modest. Move to a separate board if it's ever abused.
+  const euroMult = hard ? 1.5 : 1;
+  const euros = Math.round(haulKg * RATE * euroMult * 100) / 100;
 
   const [row] = await db
     .insert(runs)
-    .values({ playerId, displayName, haulKg, euros, islandIdx, durationS, daily })
+    .values({ playerId, displayName, haulKg, euros, islandIdx, durationS, daily, hard })
     .returning({ id: runs.id });
 
   const rank = await getRankForEuros(euros);

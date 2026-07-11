@@ -2,9 +2,8 @@
 
 import { GameAudio } from "@/game/audio";
 import { Engine, RATE } from "@/game/engine";
-import { dailyIslandOrder } from "@/game/islands";
 import { drawFishPreview, render } from "@/game/render";
-import { dailySeedString, makeRng } from "@/game/rng";
+import { makeRng } from "@/game/rng";
 import { el } from "@/game/strings.el";
 import { en } from "@/game/strings.en";
 import type { GameStrings } from "@/game/types";
@@ -27,12 +26,14 @@ interface BoardRow {
   name: string;
   euros: number;
   me: boolean;
+  hard: boolean;
+  rank: number;
 }
 
 type BoardState =
   | { status: "loading" }
   | { status: "offline" }
-  | { status: "ready"; rows: BoardRow[] };
+  | { status: "ready"; rows: BoardRow[]; you: BoardRow | null };
 
 const STRINGS: Record<Lang, GameStrings> = { el, en };
 
@@ -60,14 +61,14 @@ export default function Game() {
   const usedTouchRef = useRef(false);
   const touchMovedRef = useRef(false);
   const nameRef = useRef("");
-  const dailyRef = useRef(false);
+  const hardRef = useRef(false);
   const boardPeriodRef = useRef<"all" | "daily">("all");
   const runTokenRef = useRef<string | null>(null);
   const audioRef = useRef<GameAudio | null>(null);
 
   const [screen, setScreen] = useState<Screen>("start");
   const [lang, setLang] = useState<Lang>("el");
-  const [daily, setDaily] = useState(false);
+  const [hard, setHard] = useState(false);
   const [best, setBest] = useState(0);
   const [name, setName] = useState("");
   const [over, setOver] = useState<OverData | null>(null);
@@ -142,13 +143,26 @@ export default function Game() {
     } catch {}
   };
 
-  const loadBoard = useCallback(async (period: "all" | "daily") => {
+  // cache each period's board so flipping tabs is instant and doesn't re-hit the
+  // DB every time; force=true refetches (used after a run changes the standings)
+  const boardCacheRef = useRef<
+    Partial<Record<"all" | "daily", { rows: BoardRow[]; you: BoardRow | null }>>
+  >({});
+
+  const loadBoard = useCallback(async (period: "all" | "daily", force = false) => {
+    const cached = boardCacheRef.current[period];
+    if (cached && !force) {
+      setBoard({ status: "ready", rows: cached.rows, you: cached.you });
+      return;
+    }
     setBoard({ status: "loading" });
     try {
       const res = await fetch(`/api/leaderboard?period=${period}`);
       if (!res.ok) throw new Error("offline");
       const data = await res.json();
-      setBoard({ status: "ready", rows: data.rows });
+      const entry = { rows: data.rows as BoardRow[], you: (data.you ?? null) as BoardRow | null };
+      boardCacheRef.current[period] = entry;
+      setBoard({ status: "ready", rows: entry.rows, you: entry.you });
     } catch {
       setBoard({ status: "offline" });
     }
@@ -167,7 +181,7 @@ export default function Game() {
             haulKg: e.haulKg,
             islandIdx: e.islandIdx,
             durationS: e.elapsed,
-            daily: dailyRef.current,
+            hard: hardRef.current,
             name: nameRef.current,
           }),
         });
@@ -200,7 +214,7 @@ export default function Game() {
       const island = e.currentIslandName();
       const death = strings.deaths[Math.floor(Math.random() * strings.deaths.length)];
       const kg = e.haulKg;
-      setOver({ kg, euros: kg * RATE, island, death, runId: null, rank: null });
+      setOver({ kg, euros: kg * RATE * e.euroMult, island, death, runId: null, rank: null });
       setScreen("over");
       setBest((prev) => {
         const b = Math.max(prev, kg);
@@ -211,7 +225,8 @@ export default function Game() {
       });
       const result = await submitRun(e);
       if (result) setOver((o) => (o ? { ...o, runId: result.id, rank: result.rank } : o));
-      loadBoard(boardPeriodRef.current);
+      boardCacheRef.current = {}; // this run changed the standings — refetch fresh
+      loadBoard(boardPeriodRef.current, true);
     },
     [submitRun, loadBoard]
   );
@@ -227,10 +242,8 @@ export default function Game() {
     const engine = new Engine({
       W,
       H,
-      rng: makeRng(dailyRef.current),
-      // daily challenge shuffles the island route by day-seed; free-play keeps
-      // the canonical Crete-first order
-      islandOrder: dailyRef.current ? dailyIslandOrder(dailySeedString()) : undefined,
+      rng: makeRng(false),
+      hard: hardRef.current,
       strings,
       onGameOver: () => handleGameOver(engine),
       hint: "ontouchstart" in window ? strings.hud.hintTouch : strings.hud.hintKeys,
@@ -350,6 +363,33 @@ export default function Game() {
     start();
   };
 
+  // attach the typed name to the just-submitted run and refresh the board so the
+  // player sees themselves ranked by name (empty name = stay anonymous)
+  const registerName = async () => {
+    const n = name.trim().slice(0, 14);
+    if (n && over?.runId) {
+      await patchRunName(over.runId, n);
+      boardCacheRef.current = {}; // name changed on the board — refetch fresh
+      loadBoard(boardPeriodRef.current, true);
+    }
+  };
+
+  // mode toggles reused on the start screen and the receipt, so a player can
+  // switch between Normal / Daily / Red Sea for their next run
+  const modeToggles = (
+    <label className="daily-row hard-row">
+      <input
+        type="checkbox"
+        checked={hard}
+        onChange={(e) => {
+          setHard(e.target.checked);
+          hardRef.current = e.target.checked;
+        }}
+      />
+      {S.ui.hard}
+    </label>
+  );
+
   return (
     <>
       <div id="game-wrap">
@@ -415,17 +455,7 @@ export default function Game() {
           <button className="btn" onClick={start}>
             {S.ui.play}
           </button>
-          <label className="daily-row">
-            <input
-              type="checkbox"
-              checked={daily}
-              onChange={(e) => {
-                setDaily(e.target.checked);
-                dailyRef.current = e.target.checked;
-              }}
-            />
-            {S.ui.daily}
-          </label>
+          {modeToggles}
           {best > 0 && (
             <div className="stat">
               {S.ui.bestPrefix((best * RATE).toFixed(2), best.toFixed(1))}
@@ -443,18 +473,39 @@ export default function Game() {
           <div className="stat">{S.ui.islandLine(over.island)}</div>
           {over.rank !== null && <div className="stat">{S.ui.rankLine(over.rank)}</div>}
           <div className="death">«{over.death}»</div>
-          <input
-            className="name-in"
-            maxLength={14}
-            placeholder={S.ui.namePlaceholder}
-            autoComplete="off"
-            value={name}
-            onChange={(e) => saveName(e.target.value)}
-            onBlur={() => {
-              const n = name.trim().slice(0, 14);
-              if (n && over.runId) patchRunName(over.runId, n);
-            }}
-          />
+          <div className="name-cta">
+            <div className="name-cta-title">{S.ui.nameCTA}</div>
+            <div className="name-row">
+              <input
+                className="name-in"
+                maxLength={14}
+                placeholder={S.ui.namePlaceholder}
+                autoComplete="off"
+                value={name}
+                onChange={(e) => saveName(e.target.value)}
+                onBlur={() => {
+                  const n = name.trim().slice(0, 14);
+                  if (n && over.runId) patchRunName(over.runId, n);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") registerName();
+                }}
+              />
+              <button
+                className="name-go"
+                onClick={registerName}
+                aria-label="ok"
+                disabled={!name.trim()}
+              >
+                ✓
+              </button>
+            </div>
+            <div className="name-skip">{S.ui.nameSkip}</div>
+          </div>
+          <div className="try-mode">
+            <div className="try-mode-title">{S.ui.tryMode}</div>
+            {modeToggles}
+          </div>
           <button className="btn" onClick={again}>
             {S.ui.again}
           </button>
@@ -462,29 +513,24 @@ export default function Game() {
             {S.ui.share}
           </button>
           <div className="board">
-            <h3>
-              {S.ui.board}{" "}
-              <button
-                onClick={() => {
-                  const p = boardPeriod === "all" ? ("daily" as const) : ("all" as const);
-                  setBoardPeriod(p);
-                  boardPeriodRef.current = p;
-                  loadBoard(p);
-                }}
-                style={{
-                  float: "right",
-                  background: "none",
-                  border: "none",
-                  color: "#7fb4d8",
-                  cursor: "pointer",
-                  fontSize: 10,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.1em",
-                }}
-              >
-                {boardPeriod === "all" ? (lang === "el" ? "σήμερα ▸" : "today ▸") : lang === "el" ? "όλα ▸" : "all ▸"}
-              </button>
-            </h3>
+            <h3>{S.ui.board}</h3>
+            <div className="board-tabs" role="tablist">
+              {(["daily", "all"] as const).map((p) => (
+                <button
+                  key={p}
+                  role="tab"
+                  aria-selected={boardPeriod === p}
+                  className={"board-tab" + (boardPeriod === p ? " active" : "")}
+                  onClick={() => {
+                    setBoardPeriod(p);
+                    boardPeriodRef.current = p;
+                    loadBoard(p);
+                  }}
+                >
+                  {p === "daily" ? S.ui.boardToday : S.ui.boardAllTime}
+                </button>
+              ))}
+            </div>
             <div>
               {board.status === "loading" && <div className="row">{S.ui.boardLoading}</div>}
               {board.status === "offline" && <div className="row">{S.ui.boardOffline}</div>}
@@ -492,14 +538,25 @@ export default function Game() {
                 (board.rows.length === 0 ? (
                   <div className="row">{S.ui.boardEmpty}</div>
                 ) : (
-                  board.rows.map((r, i) => (
-                    <div key={r.id} className={"row" + (r.me ? " me" : "")}>
-                      <span>
-                        {i + 1}. {r.name}
-                      </span>
-                      <b>€{r.euros.toFixed(2)}</b>
-                    </div>
-                  ))
+                  <>
+                    {board.rows.map((r) => (
+                      <div key={r.id} className={"row" + (r.me ? " me" : "")}>
+                        <span>
+                          {r.rank}. {r.name} {r.hard && <span title="Ερυθρά Θάλασσα">🔴</span>}
+                        </span>
+                        <b>€{r.euros.toFixed(2)}</b>
+                      </div>
+                    ))}
+                    {board.you && (
+                      <div className="row me you-row">
+                        <span>
+                          {board.you.rank}. {board.you.name}{" "}
+                          {board.you.hard && <span title="Ερυθρά Θάλασσα">🔴</span>}
+                        </span>
+                        <b>€{board.you.euros.toFixed(2)}</b>
+                      </div>
+                    )}
+                  </>
                 ))}
             </div>
           </div>

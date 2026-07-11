@@ -29,6 +29,18 @@ export interface Power {
   y: number;
 }
 
+// Red Sea (hard mode) hazards you can't collect, only dodge. rock/mine cost a
+// life; jelly (τσούχτρα) stuns you for ~1s. Freddo shields you from all of them.
+export type ObstacleKind = "rock" | "mine" | "jelly";
+export interface Obstacle {
+  kind: ObstacleKind;
+  l: number;
+  x: number;
+  y: number;
+  r: number;
+  phase: number;
+}
+
 export interface Popup {
   x: number;
   y: number;
@@ -109,6 +121,8 @@ export interface GameStrings {
     howToAvoidSub: string;
     play: string;
     daily: string;
+    hard: string;
+    youRank: (rank: number) => string;
     bestPrefix: (eur: string, kg: string) => string;
     parody: string;
     receipt: string;
@@ -116,9 +130,14 @@ export interface GameStrings {
     islandLine: (island: string) => string;
     rankLine: (rank: number) => string;
     namePlaceholder: string;
+    nameCTA: string;
+    nameSkip: string;
+    tryMode: string;
     again: string;
     share: string;
     board: string;
+    boardToday: string;
+    boardAllTime: string;
     boardEmpty: string;
     boardOffline: string;
     boardLoading: string;

@@ -1,5 +1,5 @@
-import { Engine, LANES, RATE } from "./engine";
-import type { Fish, IslandTheme, Power, PowerType } from "./types";
+import { Engine, LANES } from "./engine";
+import type { Fish, IslandTheme, Obstacle, Power, PowerType } from "./types";
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -27,11 +27,49 @@ function drawHeart(ctx: Ctx, x: number, y: number, s: number, col: string) {
   ctx.restore();
 }
 
+function hexLerp(a: string, b: string, t: number): string {
+  const ah = parseInt(a.slice(1), 16),
+    bh = parseInt(b.slice(1), 16);
+  const r = Math.round(((ah >> 16) & 255) + (((bh >> 16) & 255) - ((ah >> 16) & 255)) * t);
+  const g = Math.round(((ah >> 8) & 255) + (((bh >> 8) & 255) - ((ah >> 8) & 255)) * t);
+  const bl = Math.round((ah & 255) + ((bh & 255) - (ah & 255)) * t);
+  return `rgb(${r},${g},${bl})`;
+}
+
+// Normal-mode water shifts with distance (turquoise → blue → violet → reddening)
+// as a live danger signal that reinforces the difficulty ramp.
+const WATER_STOPS: { p: number; top: string; bottom: string }[] = [
+  { p: 0, top: "#2E9BD6", bottom: "#0E5C99" },
+  { p: 0.35, top: "#2E63C6", bottom: "#0E3C8C" },
+  { p: 0.7, top: "#6A4FC0", bottom: "#3A2A80" },
+  { p: 1, top: "#C0455A", bottom: "#6E1E30" },
+];
+
+function waterColors(e: Engine): { top: string; bottom: string } {
+  if (e.hard) {
+    // "Ερυθρά Θάλασσα": crimson from t=0, deepening to blood the further you go
+    const hp = Math.min(1, e.dist / 15000);
+    return { top: hexLerp("#C43A2E", "#9E1A22", hp), bottom: hexLerp("#6E1220", "#4A0A16", hp) };
+  }
+  const p = Math.min(1, e.dist / 22000);
+  for (let i = 0; i < WATER_STOPS.length - 1; i++) {
+    if (p <= WATER_STOPS[i + 1].p) {
+      const s = WATER_STOPS[i],
+        n = WATER_STOPS[i + 1];
+      const t = (p - s.p) / (n.p - s.p || 1);
+      return { top: hexLerp(s.top, n.top, t), bottom: hexLerp(s.bottom, n.bottom, t) };
+    }
+  }
+  const last = WATER_STOPS[WATER_STOPS.length - 1];
+  return { top: last.top, bottom: last.bottom };
+}
+
 function drawSea(ctx: Ctx, e: Engine) {
   const { W, H, dist } = e;
+  const { top, bottom } = waterColors(e);
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, "#2E9BD6");
-  g.addColorStop(1, "#0E5C99");
+  g.addColorStop(0, top);
+  g.addColorStop(1, bottom);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
   // lane foam lines
@@ -225,6 +263,7 @@ function drawPlayer(ctx: Ctx, e: Engine, t: number) {
   }
   if (e.inv > 0 && Math.floor(t * 14) % 2 === 0) ctx.globalAlpha = 0.35;
   ctx.rotate(e.wobble * 0.06);
+  if (e.stunT > 0) ctx.rotate(Math.sin(t * 26) * 0.35); // jellyfish-sting dizzy wobble
   // wake
   ctx.fillStyle = "rgba(255,255,255,0.5)";
   ctx.beginPath();
@@ -543,7 +582,7 @@ function drawHUD(ctx: Ctx, e: Engine) {
   ctx.fillStyle = "#FFC93C";
   ctx.font = "900 24px sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText("€" + (e.haulKg * RATE).toFixed(2), 24, 44);
+  ctx.fillText("€" + e.eur(e.haulKg), 24, 44);
   ctx.fillStyle = "#EAF6FC";
   ctx.font = "700 12px sans-serif";
   ctx.fillText(e.haulKg.toFixed(1) + " kg · " + e.strings.hud.rate, 24, 58);
@@ -592,10 +631,83 @@ function drawHUD(ctx: Ctx, e: Engine) {
 }
 
 // Draw one full frame, same order as the prototype loop.
+function drawObstacle(ctx: Ctx, o: Obstacle, t: number) {
+  const r = o.r;
+  ctx.save();
+  ctx.translate(o.x, o.y);
+  if (o.kind === "jelly") {
+    // τσούχτρα: translucent violet bell + swaying tentacles
+    ctx.fillStyle = "rgba(196,150,255,0.6)";
+    ctx.beginPath();
+    ctx.arc(0, 0, r, Math.PI, 0);
+    ctx.quadraticCurveTo(r, r * 0.35, 0, r * 0.45);
+    ctx.quadraticCurveTo(-r, r * 0.35, -r, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.2, r * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(196,150,255,0.75)";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    for (let i = -2; i <= 2; i++) {
+      const tx = i * r * 0.3;
+      const sway = Math.sin(t * 4 + i + o.phase) * 4;
+      ctx.beginPath();
+      ctx.moveTo(tx, r * 0.25);
+      ctx.quadraticCurveTo(tx + sway, r * 0.8, tx - sway, r * 1.35);
+      ctx.stroke();
+    }
+  } else if (o.kind === "mine") {
+    // sea mine: spiked dark sphere with a flashing red light
+    ctx.strokeStyle = "#333A42";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.7, Math.sin(a) * r * 0.7);
+      ctx.lineTo(Math.cos(a) * r * 1.15, Math.sin(a) * r * 1.15);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#3A4048";
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+    const blink = (Math.sin(t * 8 + o.phase) + 1) / 2;
+    ctx.fillStyle = `rgba(255,70,55,${0.4 + blink * 0.6})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    // reef rock: grey angular lump
+    ctx.fillStyle = "#6B6357";
+    ctx.beginPath();
+    const pts = 7;
+    for (let i = 0; i < pts; i++) {
+      const a = (i / pts) * Math.PI * 2 + o.phase;
+      const rr = r * (0.8 + 0.35 * Math.abs(Math.sin(i * 2.3 + o.phase)));
+      const px = Math.cos(a) * rr,
+        py = Math.sin(a) * rr * 0.9;
+      if (i) ctx.lineTo(px, py);
+      else ctx.moveTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,0.22)";
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.25, r * 0.7, r * 0.35, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 export function render(ctx: Ctx, e: Engine, t: number) {
   drawSea(ctx, e);
   if (e.land) drawLand(ctx, e);
   for (const p of e.powers) drawPower(ctx, p, t);
+  for (const o of e.obstacles) drawObstacle(ctx, o, t);
   for (const f of e.fishes) drawFish(ctx, f, t);
   if (e.boss) drawBoss(ctx, e, t);
   drawPlayer(ctx, e, t);

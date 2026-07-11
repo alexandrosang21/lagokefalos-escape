@@ -23,6 +23,7 @@ export const runs = pgTable(
     islandIdx: integer("island_idx").notNull(),
     durationS: integer("duration_s").notNull(),
     daily: boolean("daily").notNull().default(false),
+    hard: boolean("hard").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
