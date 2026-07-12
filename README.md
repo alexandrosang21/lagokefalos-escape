@@ -5,6 +5,8 @@ lane-runner on the Aegean where big lagokefaloi bite you and small ones are wort
 **€5,33/kg** from the Ministry. Spec: `docs/lagokefalos-escape-game-spec.md`,
 original single-file prototype: `docs/lagokefalos-escape_1.html`.
 
+**Play it: [lagokefalos-escape.vercel.app](https://lagokefalos-escape.vercel.app)**
+
 ## Stack
 
 - **Next.js (App Router)** — game is a `"use client"` canvas component (`components/Game.tsx`)
