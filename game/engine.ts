@@ -1,4 +1,5 @@
 import type { SfxName } from "./audio";
+import type { UpgradeEffects } from "./upgrades";
 import { IDENTITY_ORDER, islandName, islandTheme } from "./islands";
 import type {
   Boss,
@@ -17,6 +18,15 @@ import type {
 
 export const RATE = 5.33;
 export const LANES = 3;
+
+const NO_UPGRADES: UpgradeEffects = {
+  extraLives: 0,
+  startFreddo: false,
+  startMati: false,
+  catchAssist: 0,
+  subsidyMult: 1,
+  frappeBonus: 0,
+};
 
 const POWER_TYPES: PowerType[] = ["freddo", "souvlaki", "net", "mati", "magnet"];
 
@@ -42,6 +52,7 @@ export class Engine {
   // shorter, deadlier run stays competitive on the same boards.
   hard = false;
   euroMult = 1;
+  upgrades: UpgradeEffects = NO_UPGRADES;
 
   running = false;
   tPrev = 0;
@@ -96,6 +107,7 @@ export class Engine {
     onMusicProgress?: (level: number) => void;
     islandOrder?: number[];
     hard?: boolean;
+    upgrades?: UpgradeEffects;
   }) {
     this.W = opts.W;
     this.H = opts.H;
@@ -109,6 +121,7 @@ export class Engine {
     this.order = opts.islandOrder ?? IDENTITY_ORDER;
     this.hard = opts.hard ?? false;
     this.euroMult = this.hard ? 1.5 : 1;
+    this.upgrades = opts.upgrades ?? NO_UPGRADES;
     this.reset();
   }
 
@@ -159,7 +172,7 @@ export class Engine {
   reset() {
     this.speed = 210;
     this.dist = 0;
-    this.lives = 3;
+    this.lives = 3 + this.upgrades.extraLives;
     this.haulKg = 0;
     this.islandIdx = 0;
     this.nextIslandAt = 400;
@@ -191,7 +204,9 @@ export class Engine {
     };
     this.freddoT = 0;
     this.multT = 0;
-    this.matiT = 0;
+    // a big value = the permanent start charm (blocks the first bite, no timer);
+    // the mati power-up sets a small timed value instead
+    this.matiT = this.upgrades.startMati ? 1e9 : 0;
     this.magnetT = 0;
     this.powerT = 5;
     this.spawnT = 0;
@@ -204,6 +219,7 @@ export class Engine {
 
   start(nowSeconds: number) {
     this.reset();
+    if (this.upgrades.startFreddo) this.freddoT = 6; // Πρωινό Freddo upgrade: 6s opener
     this.running = true;
     this.tPrev = nowSeconds;
     this.onMusic?.(islandTheme(this.resolvedIsland()));
@@ -230,9 +246,10 @@ export class Engine {
     this.powerT -= dt;
     if (this.powerT <= 0) {
       this.powerT = (this.hard ? 11 : 7) + this.rng() * (this.hard ? 6 : 4);
-      // frappé is the rare jackpot (~10% of drops); the classic four split the rest
+      // frappé is the rare jackpot (~10% of drops, more with the Φραπές Παντού
+      // upgrade); the classic four split the rest
       const ty: PowerType =
-        this.rng() < 0.1
+        this.rng() < 0.1 + this.upgrades.frappeBonus
           ? "frappe"
           : POWER_TYPES[Math.floor(this.rng() * POWER_TYPES.length)];
       const pl = Math.floor(this.rng() * LANES);
@@ -546,20 +563,18 @@ export class Engine {
         // longline active: bounty fish get reeled toward the player's lane
         // from anywhere on screen (never danger fish)
         f.x += (this.laneX - f.x) * Math.min(1, dt * 5);
-      } else {
-        // drift must never carry a fish beyond the catchable band of its lane —
-        // the boat can't go further out than the edge lane centers, so an
-        // over-drifted bounty fish would be physically unreachable
-        const cx = this.laneCX(f.l);
-        if (f.x < cx - 18) f.x = cx - 18;
-        if (f.x > cx + 18) f.x = cx + 18;
+      } else if (f.x < this.laneCX(f.l) - 18 || f.x > this.laneCX(f.l) + 18) {
+        // strayed outside the catchable band of its lane — ease back toward the
+        // lane centre. A smooth glide, NOT a hard snap, so a fish reeled across
+        // lanes by a just-expired longline swims back instead of teleporting.
+        f.x += (this.laneCX(f.l) - f.x) * Math.min(1, dt * 5);
       }
       // catch assist: bounty fish close to the boat's path get gently
       // magnetized so honest near-misses connect (never danger fish)
       if (
         !f.danger &&
         Math.abs(f.y - this.playerY) < 90 &&
-        Math.abs(f.x - this.laneX) < f.r + 40
+        Math.abs(f.x - this.laneX) < f.r + 40 + this.upgrades.catchAssist
       ) {
         f.x += (this.laneX - f.x) * Math.min(1, dt * 6);
       }

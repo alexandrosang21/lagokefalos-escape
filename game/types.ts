@@ -138,6 +138,14 @@ export interface GameStrings {
     board: string;
     boardToday: string;
     boardAllTime: string;
+    shop: string;
+    shopTitle: string;
+    wallet: (eur: string) => string;
+    buy: string;
+    owned: string;
+    maxed: string;
+    back: string;
+    banked: (eur: string) => string;
     boardEmpty: string;
     boardOffline: string;
     boardLoading: string;

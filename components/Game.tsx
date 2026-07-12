@@ -4,12 +4,21 @@ import { GameAudio } from "@/game/audio";
 import { Engine, RATE } from "@/game/engine";
 import { drawFishPreview, render } from "@/game/render";
 import { makeRng } from "@/game/rng";
+import {
+  bank,
+  buy,
+  effects as upgradeEffects,
+  getLevels,
+  getWallet,
+  UPGRADES,
+  type UpgradeDef,
+} from "@/game/upgrades";
 import { el } from "@/game/strings.el";
 import { en } from "@/game/strings.en";
 import type { GameStrings } from "@/game/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type Screen = "start" | "playing" | "over";
+type Screen = "start" | "playing" | "over" | "shop";
 type Lang = "el" | "en";
 
 interface OverData {
@@ -19,6 +28,7 @@ interface OverData {
   death: string;
   runId: string | null;
   rank: number | null;
+  banked: number; // amount added to the persistent wallet this run
 }
 
 interface BoardRow {
@@ -65,6 +75,7 @@ export default function Game() {
   const boardPeriodRef = useRef<"all" | "daily">("all");
   const runTokenRef = useRef<string | null>(null);
   const audioRef = useRef<GameAudio | null>(null);
+  const shopFromRef = useRef<Screen>("start"); // where the shop was opened from
 
   const [screen, setScreen] = useState<Screen>("start");
   const [lang, setLang] = useState<Lang>("el");
@@ -75,8 +86,11 @@ export default function Game() {
   const [board, setBoard] = useState<BoardState>({ status: "loading" });
   const [boardPeriod, setBoardPeriod] = useState<"all" | "daily">("all");
   const [muted, setMuted] = useState(false);
+  const [wallet, setWallet] = useState(0);
+  const [levels, setLevels] = useState<Record<string, number>>({});
 
   const S = STRINGS[lang];
+  const fmt = (n: number) => Math.round(n).toLocaleString(lang === "el" ? "el-GR" : "en-US");
 
   // persisted prefs — read after mount so server and client render the same HTML
   useEffect(() => {
@@ -90,8 +104,17 @@ export default function Game() {
       setBest(parseFloat(localStorage.getItem("lago-best") ?? "0") || 0);
       setName(storedName);
       setMuted(audioRef.current.muted);
+      setWallet(getWallet());
+      setLevels(getLevels());
     } catch {}
   }, []);
+
+  const buyUpgrade = (def: UpgradeDef) => {
+    if (buy(def)) {
+      setWallet(getWallet());
+      setLevels(getLevels());
+    }
+  };
 
   const toggleMute = () => {
     const a = audioRef.current;
@@ -214,7 +237,13 @@ export default function Game() {
       const island = e.currentIslandName();
       const death = strings.deaths[Math.floor(Math.random() * strings.deaths.length)];
       const kg = e.haulKg;
-      setOver({ kg, euros: kg * RATE * e.euroMult, island, death, runId: null, rank: null });
+      const euros = kg * RATE * e.euroMult;
+      // bank a share of the haul into the persistent wallet (ΟΠΕΚΕΠΕ subsidy
+      // boosts banking only, never the leaderboard score)
+      const bankedAmt = Math.round(euros * upgradeEffects().subsidyMult * 100) / 100;
+      bank(bankedAmt);
+      setWallet(getWallet());
+      setOver({ kg, euros, island, death, runId: null, rank: null, banked: bankedAmt });
       setScreen("over");
       setBest((prev) => {
         const b = Math.max(prev, kg);
@@ -244,6 +273,7 @@ export default function Game() {
       H,
       rng: makeRng(false),
       hard: hardRef.current,
+      upgrades: upgradeEffects(),
       strings,
       onGameOver: () => handleGameOver(engine),
       hint: "ontouchstart" in window ? strings.hud.hintTouch : strings.hud.hintKeys,
@@ -456,6 +486,16 @@ export default function Game() {
             {S.ui.play}
           </button>
           {modeToggles}
+          <button
+            className="btn ghost"
+            onClick={() => {
+              shopFromRef.current = "start";
+              setScreen("shop");
+            }}
+          >
+            {S.ui.shop}
+          </button>
+          {wallet > 0 && <div className="stat wallet-line">{S.ui.wallet(fmt(wallet))}</div>}
           {best > 0 && (
             <div className="stat">
               {S.ui.bestPrefix((best * RATE).toFixed(2), best.toFixed(1))}
@@ -472,6 +512,10 @@ export default function Game() {
           <div className="stat">{S.ui.haulLine(over.kg.toFixed(1))}</div>
           <div className="stat">{S.ui.islandLine(over.island)}</div>
           {over.rank !== null && <div className="stat">{S.ui.rankLine(over.rank)}</div>}
+          <div className="stat wallet-line">
+            {S.ui.wallet(fmt(wallet))}{" "}
+            {over.banked > 0 && <span className="wallet-gain">+€{over.banked.toFixed(2)}</span>}
+          </div>
           <div className="death">«{over.death}»</div>
           <div className="name-cta">
             <div className="name-cta-title">{S.ui.nameCTA}</div>
@@ -506,6 +550,15 @@ export default function Game() {
             <div className="try-mode-title">{S.ui.tryMode}</div>
             {modeToggles}
           </div>
+          <button
+            className="btn ghost"
+            onClick={() => {
+              shopFromRef.current = "over";
+              setScreen("shop");
+            }}
+          >
+            {S.ui.shop}
+          </button>
           <button className="btn" onClick={again}>
             {S.ui.again}
           </button>
@@ -560,6 +613,50 @@ export default function Game() {
                 ))}
             </div>
           </div>
+          <div className="tiny">{S.ui.parody}</div>
+        </div>
+      )}
+
+      {screen === "shop" && (
+        <div className="overlay">
+          <div className="eyebrow">{S.ui.shopTitle}</div>
+          <div className="wallet-big">{S.ui.wallet(fmt(wallet))}</div>
+          <div className="shop-list">
+            {UPGRADES.map((def) => {
+              const lvl = levels[def.id] ?? 0;
+              const cost = lvl < def.costs.length ? def.costs[lvl] : null;
+              const maxed = cost === null;
+              const tiered = def.costs.length > 1;
+              const affordable = cost !== null && wallet >= cost;
+              return (
+                <div key={def.id} className={"shop-item" + (maxed ? " maxed" : "")}>
+                  <div className="shop-emoji">{def.emoji}</div>
+                  <div className="shop-info">
+                    <div className="shop-name">
+                      {lang === "el" ? def.el : def.en}
+                      {tiered && (
+                        <span className="shop-lvl">
+                          {" "}
+                          {lvl}/{def.costs.length}
+                        </span>
+                      )}
+                    </div>
+                    <div className="shop-desc">{lang === "el" ? def.elDesc : def.enDesc}</div>
+                  </div>
+                  <button
+                    className={"shop-buy" + (affordable ? "" : " dim")}
+                    disabled={maxed || !affordable}
+                    onClick={() => buyUpgrade(def)}
+                  >
+                    {maxed ? (tiered ? S.ui.maxed : S.ui.owned) : `€${fmt(cost)}`}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <button className="btn" onClick={() => setScreen(shopFromRef.current)}>
+            {S.ui.back}
+          </button>
           <div className="tiny">{S.ui.parody}</div>
         </div>
       )}

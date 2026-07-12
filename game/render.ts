@@ -599,7 +599,8 @@ function drawHUD(ctx: Ctx, e: Engine) {
   const eff: string[] = [];
   if (e.freddoT > 0) eff.push("☕ " + e.strings.hud.invincible + " " + Math.ceil(e.freddoT));
   if (e.multT > 0) eff.push("🕸 ×2 " + Math.ceil(e.multT));
-  if (e.matiT > 0) eff.push("🧿 " + Math.ceil(e.matiT));
+  // big matiT = the permanent start charm → show a steady 🧿 with no countdown
+  if (e.matiT > 0) eff.push(e.matiT > 3600 ? "🧿" : "🧿 " + Math.ceil(e.matiT));
   if (e.magnetT > 0) eff.push("🧲 " + Math.ceil(e.magnetT));
   if (e.comboMult() > 1) eff.push("🔥 ×" + e.comboMult());
   if (eff.length) {

@@ -370,6 +370,97 @@ input.name-in {
   color: var(--ink);
 }
 
+/* --- upgrade shop --- */
+.wallet-line {
+  color: #ffe08a;
+  font-weight: 800;
+}
+
+.wallet-gain {
+  color: #9bffb0;
+  font-weight: 800;
+  font-size: 0.85em;
+}
+
+.wallet-big {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--sun);
+  margin: 4px 0 16px;
+}
+
+.shop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, 92vw);
+}
+
+.shop-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.shop-item.maxed {
+  opacity: 0.65;
+}
+
+.shop-emoji {
+  font-size: 23px;
+  flex: none;
+  width: 28px;
+  text-align: center;
+}
+
+.shop-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.shop-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--foam);
+}
+
+.shop-lvl {
+  color: var(--sun);
+  font-size: 12px;
+}
+
+.shop-desc {
+  font-size: 11px;
+  color: #bfe0f5;
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+.shop-buy {
+  flex: none;
+  border: none;
+  background: var(--sun);
+  color: var(--ink);
+  font-weight: 900;
+  font-size: 13px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.shop-buy.dim,
+.shop-buy:disabled {
+  background: rgba(255, 255, 255, 0.14);
+  color: #9fc4dd;
+  cursor: default;
+}
+
 .board .row {
   display: flex;
   justify-content: space-between;
